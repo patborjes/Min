@@ -51,3 +51,15 @@ export async function deletePost(slug: string, postId: string) {
   revalidatePath(`/${slug}`)
   revalidatePath(`/${slug}/styret`)
 }
+
+export async function moderatorResolvePost(slug: string, postId: string) {
+  await assertStyret(slug)
+  const service = createServiceClient()
+  await service
+    .from('posts')
+    .update({ resolved_at: new Date().toISOString() })
+    .eq('id', postId)
+    .is('resolved_at', null)
+  revalidatePath(`/${slug}`)
+  revalidatePath(`/${slug}/styret`)
+}

@@ -16,6 +16,16 @@ export interface Post {
   poster_name: string
   apartment_nr: string
   is_active: boolean
+  resolved_at: string | null
+  created_at: string
+}
+
+export interface Reply {
+  id: string
+  post_id: string
+  poster_name: string
+  apartment_nr: string
+  body: string
   created_at: string
 }
 

@@ -1,9 +1,15 @@
-import { Post, PostType, POST_TYPE_LABELS } from '@/types'
+import { Post, Reply, PostType, POST_TYPE_LABELS } from '@/types'
 import PostCard from './PostCard'
 
 const TYPES: PostType[] = ['gir', 'tilbyr', 'trenger', 'info']
 
-export default function PostList({ posts }: { posts: Post[] }) {
+interface Props {
+  posts: Post[]
+  repliesByPost: Record<string, Reply[]>
+  slug: string
+}
+
+export default function PostList({ posts, repliesByPost, slug }: Props) {
   if (posts.length === 0) {
     return (
       <div className="mt-8 text-center text-stone-400">
@@ -24,7 +30,12 @@ export default function PostList({ posts }: { posts: Post[] }) {
             </h2>
             <div className="space-y-3">
               {filtered.map((post) => (
-                <PostCard key={post.id} post={post} />
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  replies={repliesByPost[post.id] ?? []}
+                  slug={slug}
+                />
               ))}
             </div>
           </section>
