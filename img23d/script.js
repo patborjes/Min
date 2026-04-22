@@ -40,11 +40,112 @@ window.ModelExporter = {
         let ptr = Module.ccall('generateGLB', 'int', [], []);
         ModelExporter.downloadFile(ptr, ModelExporter.name+'.glb', 'model/gltf-binary');
     },
+    downloadSVG: function() {
+        if (ModelExporter.assertModelNonempty()) return;
+
+        // Get OBJ data as text from WASM
+        let ptr = Module.ccall('generateOBJ', 'int', [], []);
+        let size = Module.ccall('getFileSize', 'int', [], []);
+        let bytes = new Uint8Array(Module.HEAPU8.buffer, ptr, size);
+        let objText = new TextDecoder().decode(bytes);
+
+        // Parse vertices and faces from OBJ
+        let vertices = [];
+        let faces = [];
+        for (let line of objText.split('\n')) {
+            let parts = line.trim().split(/\s+/);
+            if (parts[0] === 'v') {
+                vertices.push([parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])]);
+            } else if (parts[0] === 'f') {
+                let indices = parts.slice(1).map(p => parseInt(p.split('/')[0]) - 1);
+                if (indices.length >= 3) faces.push(indices);
+            }
+        }
+
+        if (vertices.length === 0 || faces.length === 0) {
+            alert("No mesh data available.");
+            return;
+        }
+
+        // View angles from UI
+        let az = parseFloat(document.getElementById('svg-azimuth').value) * Math.PI / 180;
+        let el = parseFloat(document.getElementById('svg-elevation').value) * Math.PI / 180;
+        let ca = Math.cos(az), sa = Math.sin(az);
+        let ce = Math.cos(el), se = Math.sin(el);
+
+        // Orthographic projection: rotate by azimuth (Y axis) then elevation (X axis)
+        function project(v) {
+            let x1 =  ca * v[0] + sa * v[2];
+            let y1 =  v[1];
+            let z1 = -sa * v[0] + ca * v[2];
+            let x2 = x1;
+            let y2 = ce * y1 - se * z1;
+            let z2 = se * y1 + ce * z1;
+            return { x: x2, y: -y2, z: z2 };
+        }
+
+        let proj = vertices.map(project);
+
+        // Compute bounds for scaling
+        let xs = proj.map(p => p.x);
+        let ys = proj.map(p => p.y);
+        let minX = Math.min(...xs), maxX = Math.max(...xs);
+        let minY = Math.min(...ys), maxY = Math.max(...ys);
+        let dim = Math.max(maxX - minX, maxY - minY) || 1;
+        let svgSize = 500;
+        let pad = 20;
+        let scale = svgSize / dim;
+        let svgW = Math.round((maxX - minX) * scale) + 2 * pad;
+        let svgH = Math.round((maxY - minY) * scale) + 2 * pad;
+
+        function toSVG(p) {
+            return {
+                x: Math.round(((p.x - minX) * scale + pad) * 100) / 100,
+                y: Math.round(((p.y - minY) * scale + pad) * 100) / 100
+            };
+        }
+
+        // Back-face culling: collect edges from front-facing triangles
+        let visibleEdges = new Set();
+        for (let face of faces) {
+            let a = proj[face[0]], b = proj[face[1]], c = proj[face[2]];
+            let cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+            if (cross > 0) {
+                for (let i = 0; i < face.length; i++) {
+                    let ia = face[i], ib = face[(i + 1) % face.length];
+                    visibleEdges.add(ia < ib ? `${ia},${ib}` : `${ib},${ia}`);
+                }
+            }
+        }
+
+        // Build SVG lines
+        let lines = [];
+        for (let edge of visibleEdges) {
+            let [ia, ib] = edge.split(',').map(Number);
+            let pa = toSVG(proj[ia]), pb = toSVG(proj[ib]);
+            lines.push(`  <line x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}"/>`);
+        }
+
+        let strokeWidth = parseFloat(document.getElementById('svg-stroke').value) || 0.5;
+        let svg = `<?xml version="1.0" encoding="UTF-8"?>\n` +
+            `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}">\n` +
+            `  <g stroke="black" stroke-width="${strokeWidth}" fill="none">\n` +
+            lines.join('\n') + '\n' +
+            `  </g>\n</svg>`;
+
+        let blob = new Blob([svg], { type: 'image/svg+xml' });
+        let link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = ModelExporter.name + '_plotter.svg';
+        link.click();
+        URL.revokeObjectURL(link.href);
+    },
     init: function() {
         document.getElementById("export-stl").onclick = ModelExporter.downloadSTL;
         document.getElementById("export-ply").onclick = ModelExporter.downloadPLY;
         document.getElementById("export-obj").onclick = ModelExporter.downloadOBJ;
         document.getElementById("export-glb").onclick = ModelExporter.downloadGLB;
+        document.getElementById("export-svg").onclick = ModelExporter.downloadSVG;
     }
 };
 

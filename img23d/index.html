@@ -267,6 +267,15 @@
           <input id="export-obj" type="button" value="OBJ" />
           <input id="export-glb" type="button" value="GLB" />
         </span>
+        <br/>
+        <span>Plotter SVG: az&nbsp;<input type="number" id="svg-azimuth" value="30" step="5"
+            style="width:42px" title="Azimuth (degrees)">°
+          el&nbsp;<input type="number" id="svg-elevation" value="30" step="5"
+            style="width:42px" title="Elevation (degrees)">°
+          stroke&nbsp;<input type="number" id="svg-stroke" value="0.5" step="0.1" min="0.1"
+            style="width:40px" title="Stroke width (px)">px
+          <input id="export-svg" type="button" value="SVG" />
+        </span>
         <br />
         <p id="error-message" style="display:none"></p>
     </div>
