@@ -304,15 +304,18 @@ input[type=range]::-moz-range-thumb {
       <div class="drop-zone" id="drop-zone">
         <canvas id="preview-canvas"></canvas>
         <div class="drop-hint" id="drop-hint">
-          Drop a portrait photo here<br>or click to upload
+          Drop a portrait photo here<br>or tap Upload below
         </div>
         <div class="face-badge" id="face-badge">✓ FACE DETECTED</div>
-        <!-- Transparent file input covers the whole zone — works reliably on iOS Safari -->
-        <input type="file" id="file-in" accept="image/*"
-               style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:5">
       </div>
       <div class="btn-row">
-        <label for="file-in" class="file-label">Upload</label>
+        <!-- Input nested inside label — the only pattern guaranteed to work on iOS Safari.
+             Kept outside the drop-zone so overflow:hidden cannot block touch events. -->
+        <label class="file-label">
+          Upload
+          <input type="file" id="file-in" accept="image/*"
+                 style="position:absolute;width:1px;height:1px;opacity:0;left:-9999px">
+        </label>
         <button onclick="openCam()">Camera</button>
       </div>
     </div>
