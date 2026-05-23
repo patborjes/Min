@@ -630,7 +630,6 @@ function autoCannyThreshold(mag, w, h, percentile) {
   nonzero.sort((a,b)=>a-b);
   return nonzero[Math.floor(nonzero.length * percentile / 100)] || 40;
 }
-}
 
 // ── CLAHE (Contrast Limited Adaptive Histogram Equalization) ───
 function clahe(gray, w, h, clipLimit=2.5, tileSize=48) {
