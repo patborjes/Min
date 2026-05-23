@@ -2,7 +2,7 @@ name: Deploy img23d to GitHub Pages
 
 on:
   push:
-    branches: [main, "claude/setup-img23d-app-Ov7PK"]
+    branches: [main, "claude/setup-img23d-app-Ov7PK", "claude/elegant-keller-LpdTs"]
 
 permissions:
   contents: read
