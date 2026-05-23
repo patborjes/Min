@@ -303,13 +303,13 @@ input[type=range]::-moz-range-thumb {
 
       <div class="ctrl">
         <div class="ctrl-label"><span>Max paths</span><span id="v-paths">80</span></div>
-        <input type="range" id="s-paths" min="15" max="160" value="80">
+        <input type="range" id="s-paths" min="15" max="160" value="110">
         <div class="range-hints"><span>Simple</span><span>Complex</span></div>
       </div>
 
       <div class="ctrl">
         <div class="ctrl-label"><span>Edge sensitivity</span><span id="v-thresh">60</span></div>
-        <input type="range" id="s-thresh" min="10" max="180" value="60">
+        <input type="range" id="s-thresh" min="10" max="180" value="40">
         <div class="range-hints"><span>More edges</span><span>Fewer edges</span></div>
       </div>
 
@@ -817,17 +817,38 @@ async function processImage() {
   setStatus('Tracing contours…', true); await sleep(10);
   let contours = traceContours(edges, imgW, imgH);
 
-  setStatus(`${contours.length} contours — sorting by distance from centre…`, true); await sleep(10);
+  setStatus(`${contours.length} contours — selecting for full-face coverage…`, true); await sleep(10);
 
-  const cx=imgW/2, cy=imgH/2;
-  contours.sort((a,b) => {
-    const [asx,asy]=a.reduce(([sx,sy],[px,py])=>[sx+px,sy+py],[0,0]);
-    const [bsx,bsy]=b.reduce(([sx,sy],[px,py])=>[sx+px,sy+py],[0,0]);
-    const aD=(asx/a.length-cx)**2+(asy/a.length-cy)**2;
-    const bD=(bsx/b.length-cx)**2+(bsy/b.length-cy)**2;
-    return aD-bD;
-  });
-  contours = contours.slice(0, maxPaths);
+  // Sort by length descending — longest lines = most important structural features
+  contours.sort((a, b) => b.length - a.length);
+
+  // Spatial grid sampling: divide image into 6×6 cells and pick evenly from each.
+  // This guarantees paths from every region (forehead, chin, sides) are kept.
+  const GRID = 6;
+  const cw = imgW / GRID, ch = imgH / GRID;
+  const buckets = Array.from({ length: GRID * GRID }, () => []);
+  for (const c of contours) {
+    const mx = c.reduce((s, p) => s + p[0], 0) / c.length;
+    const my = c.reduce((s, p) => s + p[1], 0) / c.length;
+    const gi = Math.min(GRID-1, my/ch|0) * GRID + Math.min(GRID-1, mx/cw|0);
+    buckets[gi].push(c);
+  }
+  // Round-robin across buckets so every region contributes
+  const selected = [];
+  const perCell = Math.ceil(maxPaths / (GRID * GRID));
+  for (let i = 0; i < perCell && selected.length < maxPaths; i++) {
+    for (const bucket of buckets) {
+      if (selected.length >= maxPaths) break;
+      if (i < bucket.length) selected.push(bucket[i]);
+    }
+  }
+  // Fill any remaining slots with the longest unused contours
+  const selSet = new Set(selected);
+  for (const c of contours) {
+    if (selected.length >= maxPaths) break;
+    if (!selSet.has(c)) selected.push(c);
+  }
+  contours = selected;
 
   setStatus('RDP simplification…', true); await sleep(10);
   const simplified = contours.map(c=>rdp(c,eps)).filter(c=>c.length>=2);
