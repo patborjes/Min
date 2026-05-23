@@ -308,9 +308,9 @@ input[type=range]::-moz-range-thumb {
       </div>
 
       <div class="ctrl">
-        <div class="ctrl-label"><span>Edge sensitivity</span><span id="v-thresh">60</span></div>
-        <input type="range" id="s-thresh" min="10" max="180" value="40">
-        <div class="range-hints"><span>More edges</span><span>Fewer edges</span></div>
+        <div class="ctrl-label"><span>Detail level</span><span id="v-thresh">70</span>%</div>
+        <input type="range" id="s-thresh" min="30" max="95" value="70">
+        <div class="range-hints"><span>Outline only</span><span>Full detail</span></div>
       </div>
 
       <div class="ctrl">
@@ -390,7 +390,7 @@ function bindSlider(id, outId, scale) {
   });
 }
 bindSlider('s-paths',  'v-paths',  null);
-bindSlider('s-thresh', 'v-thresh', null);
+bindSlider('s-thresh', 'v-thresh', null);  // shows percentile
 bindSlider('s-rdp',    'v-rdp',    null);
 bindSlider('s-clahe',  'v-clahe',  10);
 
@@ -568,12 +568,32 @@ function boxBlur1D(src, w, h, r) {
 }
 
 function gaussBlur(g, w, h) {
-  // 2-pass box blur — enough to kill JPEG noise without blurring real edges
+  // 2-pass box blur — kills JPEG noise without blurring real edges
   let f = boxBlur1D(g, w, h, 2);
   f = boxBlur1D(f, w, h, 1);
   const out = new Uint8ClampedArray(w * h);
   for (let i = 0; i < out.length; i++) out[i] = f[i];
   return out;
+}
+
+// Unsharp mask: sharpens soft facial features before edge detection
+function unsharpMask(gray, w, h, amount=1.8) {
+  const blurred = boxBlur1D(boxBlur1D(gray, w, h, 3), w, h, 3);
+  const out = new Uint8ClampedArray(w * h);
+  for (let i=0; i<w*h; i++)
+    out[i] = Math.max(0, Math.min(255, gray[i] + amount * (gray[i] - blurred[i])));
+  return out;
+}
+
+// Auto Canny threshold: uses percentile of non-zero gradient magnitudes
+// so threshold adapts to each image's actual contrast range
+function autoCannyThreshold(mag, w, h, percentile) {
+  const nonzero = [];
+  for (let i=0; i<w*h; i++) if (mag[i]>1) nonzero.push(mag[i]);
+  if (!nonzero.length) return 40;
+  nonzero.sort((a,b)=>a-b);
+  return nonzero[Math.floor(nonzero.length * percentile / 100)] || 40;
+}
 }
 
 // ── CLAHE (Contrast Limited Adaptive Histogram Equalization) ───
@@ -796,11 +816,10 @@ async function processImage() {
   document.getElementById('dl-btn').style.display = 'none';
 
   const maxPaths  = +document.getElementById('s-paths').value;
-  const hiThresh  = +document.getElementById('s-thresh').value;
+  const detailPct = +document.getElementById('s-thresh').value; // 30=outline … 95=full detail
   const rdpPct    = +document.getElementById('s-rdp').value / 100;
   const clipLimit = +document.getElementById('s-clahe').value / 10;
-  // eps was rdpPct*7+0.4 which at default 25% = 2.15 (too high — collapsed every path to 2 pts)
-  const eps       = rdpPct * 2.5 + 0.15;  // at 25% = 0.78, at 80% = 2.15
+  const eps       = rdpPct * 2.5 + 0.15;
 
   setStatus('Grayscale…', true); await sleep(10);
   const gray = toGray(imgData.data, imgW, imgH);
@@ -808,10 +827,21 @@ async function processImage() {
   setStatus('CLAHE contrast enhancement…', true); await sleep(10);
   const enhanced = clipLimit > 0.5 ? clahe(gray, imgW, imgH, clipLimit) : gray;
 
-  setStatus('Gaussian blur…', true); await sleep(10);
-  const blurred = gaussBlur(enhanced, imgW, imgH);
+  setStatus('Sharpening edges…', true); await sleep(10);
+  const sharpened = unsharpMask(enhanced, imgW, imgH, 1.8);
 
-  setStatus('Canny edge detection…', true); await sleep(10);
+  setStatus('Gaussian blur…', true); await sleep(10);
+  const blurred = gaussBlur(sharpened, imgW, imgH);
+
+  // Auto-threshold: compute sobel magnitudes, pick percentile based on detail slider.
+  // detailPct=70 → percentile=100-70=30 → 30th percentile of magnitudes = lots of detail
+  // detailPct=30 → percentile=100-30=70 → 70th percentile = only strong outlines
+  setStatus('Auto-thresholding…', true); await sleep(10);
+  const { mag: magPreview, ang: angPreview } = sobel(blurred, imgW, imgH);
+  const percentile = 100 - detailPct;  // invert: high detail = low percentile
+  const hiThresh = autoCannyThreshold(magPreview, imgW, imgH, percentile);
+
+  setStatus(`Canny edges (threshold ${hiThresh|0})…`, true); await sleep(10);
   const edges = canny(blurred, imgW, imgH, hiThresh);
 
   setStatus('Tracing contours…', true); await sleep(10);
