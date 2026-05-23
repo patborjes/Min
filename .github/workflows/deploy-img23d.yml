@@ -2,12 +2,10 @@ name: Deploy img23d to GitHub Pages
 
 on:
   push:
-    branches: [main, "claude/setup-img23d-app-Ov7PK"]
+    branches: [main, "claude/setup-img23d-app-Ov7PK", "claude/elegant-keller-LpdTs"]
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
@@ -15,15 +13,10 @@ concurrency:
 
 jobs:
   deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v4
-      - uses: actions/upload-pages-artifact@v3
+      - uses: peaceiris/actions-gh-pages@v4
         with:
-          path: img23d/
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: img23d/
