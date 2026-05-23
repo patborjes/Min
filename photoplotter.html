@@ -361,9 +361,9 @@ input[type=range]::-moz-range-thumb {
       <button class="accent" id="gen-btn" onclick="processImage()" disabled>Generate SVG →</button>
     </div>
 
-    <div class="status-bar">
+    <div class="status-bar" id="status-bar">
       <div class="spinner" id="spin"></div>
-      <span id="status-text">Load an image to start.</span>
+      <span id="status-text">Last opp et bilde for å starte.</span>
     </div>
   </div>
 
@@ -425,6 +425,10 @@ function setColorMode(m) {
 function setStatus(msg, busy=false) {
   document.getElementById('status-text').textContent = msg;
   document.getElementById('spin').classList.toggle('active', busy);
+  // Highlight error messages so they're visible on mobile
+  const bar = document.getElementById('status-bar');
+  if (bar) bar.style.color = (!busy && msg && !msg.startsWith('Ready') && !msg.startsWith('Done') && !msg.startsWith('Image') && !msg.startsWith('Load'))
+    ? '#ff6b6b' : '';
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -443,17 +447,26 @@ dropZone.addEventListener('drop', e => {
 });
 // File input change (covers both drop-zone tap and Upload label on iOS + desktop)
 document.getElementById('file-in').addEventListener('change', e => {
-  if (e.target.files[0]) loadFile(e.target.files[0]);
+  const f = e.target.files[0];
+  if (f) loadFile(f);
+  // Reset value so re-selecting the same file fires change again
+  e.target.value = '';
 });
 
 function loadFile(file) {
-  const reader = new FileReader();
-  reader.onload = e => {
-    const img = new Image();
-    img.onload = () => loadImg(img);
-    img.src = e.target.result;
+  setStatus('Laster bilde…', true);
+  // createObjectURL is faster and handles HEIC/HEIF on iOS better than FileReader
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    loadImg(img);
   };
-  reader.readAsDataURL(file);
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    setStatus('Kunne ikke laste bilde. Prøv å eksportere som JPG fra Bilder-appen.');
+  };
+  img.src = url;
 }
 
 function loadImg(img) {
