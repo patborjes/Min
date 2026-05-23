@@ -344,6 +344,8 @@ function initConfig() {
 }
 
 function onReady() {
+    if (window._onReadyCalled) return;
+    window._onReadyCalled = true;
     initInteraction();
     initDragDrop();
     initConfig();
