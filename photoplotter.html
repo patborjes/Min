@@ -315,7 +315,7 @@ input[type=range]::-moz-range-thumb {
 
       <div class="ctrl">
         <div class="ctrl-label"><span>Abstraction</span><span id="v-rdp">60</span>%</div>
-        <input type="range" id="s-rdp" min="0" max="95" value="60">
+        <input type="range" id="s-rdp" min="0" max="95" value="20">
         <div class="range-hints"><span>Detailed</span><span>Abstract</span></div>
       </div>
 
@@ -568,9 +568,8 @@ function boxBlur1D(src, w, h, r) {
 }
 
 function gaussBlur(g, w, h) {
-  // 3-pass box blur approximates Gaussian
+  // 2-pass box blur — enough to kill JPEG noise without blurring real edges
   let f = boxBlur1D(g, w, h, 2);
-  f = boxBlur1D(f, w, h, 2);
   f = boxBlur1D(f, w, h, 1);
   const out = new Uint8ClampedArray(w * h);
   for (let i = 0; i < out.length; i++) out[i] = f[i];
@@ -755,7 +754,7 @@ function traceContours(edges, w, h) {
         if (edges[i]!==255||visited[i]) continue;
         if (pass===0 && deg[i]!==1) continue;
         const chain=trace(x,y);
-        if (chain.length>=4) contours.push(chain);
+        if (chain.length>=10) contours.push(chain);
       }
     }
   }
@@ -800,7 +799,8 @@ async function processImage() {
   const hiThresh  = +document.getElementById('s-thresh').value;
   const rdpPct    = +document.getElementById('s-rdp').value / 100;
   const clipLimit = +document.getElementById('s-clahe').value / 10;
-  const eps       = rdpPct * 7 + 0.4;
+  // eps was rdpPct*7+0.4 which at default 25% = 2.15 (too high — collapsed every path to 2 pts)
+  const eps       = rdpPct * 2.5 + 0.15;  // at 25% = 0.78, at 80% = 2.15
 
   setStatus('Grayscale…', true); await sleep(10);
   const gray = toGray(imgData.data, imgW, imgH);
@@ -851,7 +851,14 @@ async function processImage() {
   contours = selected;
 
   setStatus('RDP simplification…', true); await sleep(10);
-  const simplified = contours.map(c=>rdp(c,eps)).filter(c=>c.length>=2);
+  function pxLength(pts) {
+    let l=0;
+    for (let i=1;i<pts.length;i++) l+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);
+    return l;
+  }
+  const simplified = contours
+    .map(c => rdp(c, eps))
+    .filter(c => c.length >= 3 && pxLength(c) >= 10);  // drop 2-pt stubs
 
   setStatus('Building SVG…', true); await sleep(10);
   svgString = buildSVG(simplified, imgW, imgH);
