@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PhotoPlotter — Portrait to Line Art</title>
+<style>
+:root {
+  --bg: #0c0c0c;
+  --surface: #161616;
+  --border: #2c2c2c;
+  --text: #d8d8d8;
+  --muted: #555;
+  --accent: #c8ff00;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Courier New', Courier, monospace;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  padding: 1.2rem 2rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+}
+
+h1 {
+  font-size: 1.1rem;
+  font-weight: normal;
+  letter-spacing: 0.15em;
+  color: var(--accent);
+}
+
+.tagline {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  min-height: 0;
+}
+
+/* ── Left panel ── */
+.left {
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+}
+
+.section {
+  padding: 1.2rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-title {
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.9rem;
+}
+
+/* Drop zone */
+.drop-zone {
+  aspect-ratio: 1;
+  border: 1px dashed var(--border);
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.drop-zone:hover { border-color: var(--accent); }
+.drop-zone.over  { border-color: var(--accent); background: rgba(200,255,0,0.04); }
+
+.drop-hint {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 2;
+  pointer-events: none;
+}
+
+#preview-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: none;
+}
+
+.btn-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+button {
+  flex: 1;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.55rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+button:hover:not(:disabled) { border-color: var(--text); }
+
+button.accent {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+button.accent:hover:not(:disabled) {
+  background: var(--accent);
+  color: #000;
+}
+button.accent:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* Sliders */
+.ctrl {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.9rem;
+}
+
+.ctrl:last-child { margin-bottom: 0; }
+
+.ctrl-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.ctrl-label span:last-child { color: var(--text); }
+
+input[type=range] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 2px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+input[type=range]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+}
+
+.range-hints {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6rem;
+  color: #3a3a3a;
+  margin-top: 0.1rem;
+}
+
+/* Status */
+.status-bar {
+  padding: 0.6rem 1.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.7rem;
+  color: var(--muted);
+  min-height: 2rem;
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.spinner {
+  display: none;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+.spinner.active { display: block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Right panel ── */
+.right {
+  display: flex;
+  flex-direction: column;
+}
+
+.output-toolbar {
+  padding: 0.7rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.output-toolbar .info {
+  font-size: 0.7rem;
+  color: var(--muted);
+  flex: 1;
+}
+
+#svg-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #f8f8f8;
+  position: relative;
+}
+
+#svg-wrap .empty-msg {
+  font-family: 'Courier New', monospace;
+  font-size: 0.75rem;
+  color: #bbb;
+  text-align: center;
+  line-height: 2;
+}
+
+#svg-wrap svg {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* Camera overlay */
+.overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+.overlay.open { display: flex; }
+
+.cam-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: min(480px, 95vw);
+}
+
+#cam-video {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: #000;
+  display: block;
+}
+
+/* Responsive */
+@media (max-width: 700px) {
+  .main { grid-template-columns: 1fr; }
+  .left { border-right: none; }
+  #svg-wrap { min-height: 60vw; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>PHOTOPLOTTER</h1>
+  <span class="tagline">Portrait → Pen Plotter SVG · runs entirely in your browser</span>
+</header>
+
+<div class="main">
+
+  <!-- ── LEFT ── -->
+  <div class="left">
+
+    <div class="section">
+      <div class="section-title">01 · Load Image</div>
+      <div class="drop-zone" id="drop-zone">
+        <canvas id="preview-canvas"></canvas>
+        <div class="drop-hint" id="drop-hint">
+          Drop a photo here<br>or click to upload
+        </div>
+      </div>
+      <div class="btn-row">
+        <button onclick="document.getElementById('file-in').click()">Upload</button>
+        <button onclick="openCam()">Camera</button>
+      </div>
+      <input type="file" id="file-in" accept="image/*" style="display:none">
+    </div>
+
+    <div class="section">
+      <div class="section-title">02 · Settings</div>
+
+      <div class="ctrl">
+        <div class="ctrl-label"><span>Max paths</span><span id="v-paths">80</span></div>
+        <input type="range" id="s-paths" min="15" max="160" value="80">
+        <div class="range-hints"><span>Simple</span><span>Complex</span></div>
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-label"><span>Edge sensitivity</span><span id="v-thresh">75</span></div>
+        <input type="range" id="s-thresh" min="15" max="200" value="75">
+        <div class="range-hints"><span>More edges</span><span>Fewer edges</span></div>
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-label"><span>Abstraction</span><span id="v-rdp">65</span>%</div>
+        <input type="range" id="s-rdp" min="0" max="95" value="65">
+        <div class="range-hints"><span>Detailed</span><span>Abstract</span></div>
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-label"><span>Stroke color</span></div>
+        <div class="btn-row" style="margin-top:0.2rem">
+          <button id="col-random" class="accent" onclick="setColorMode('random')">Random</button>
+          <button id="col-black"  onclick="setColorMode('black')">Black</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">03 · Generate</div>
+      <button class="accent" id="gen-btn" onclick="processImage()" disabled>Generate SVG →</button>
+    </div>
+
+    <div class="status-bar">
+      <div class="spinner" id="spin"></div>
+      <span id="status-text">Load an image to start.</span>
+    </div>
+  </div>
+
+  <!-- ── RIGHT ── -->
+  <div class="right">
+    <div class="output-toolbar">
+      <span class="info" id="out-info">No output yet</span>
+      <button onclick="animateSVG()" id="replay-btn" style="flex:none;display:none">↺ Replay</button>
+      <button onclick="downloadSVG()" id="dl-btn" style="flex:none;display:none">Download SVG</button>
+    </div>
+    <div id="svg-wrap">
+      <div class="empty-msg">
+        Load a portrait photo<br>then click Generate SVG
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Camera overlay -->
+<div class="overlay" id="cam-overlay">
+  <div class="cam-box">
+    <div style="font-size:0.75rem;color:var(--muted);letter-spacing:0.08em">CAMERA</div>
+    <video id="cam-video" autoplay playsinline muted></video>
+    <div class="btn-row">
+      <button class="accent" onclick="snapCam()">Snap Photo</button>
+      <button onclick="closeCam()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════════
+let imgData = null, imgW = 0, imgH = 0;
+let svgString = null;
+let colorMode = 'random';
+let camStream = null;
+
+// ═══════════════════════════════════════════════════════════════
+// UI wiring
+// ═══════════════════════════════════════════════════════════════
+['s-paths','s-thresh','s-rdp'].forEach(id => {
+  const el = document.getElementById(id);
+  const out = document.getElementById('v-' + id.slice(2));
+  el.addEventListener('input', () => { out.textContent = el.value; });
+});
+
+function setColorMode(m) {
+  colorMode = m;
+  document.getElementById('col-random').className = m === 'random' ? 'accent' : '';
+  document.getElementById('col-black').className  = m === 'black'  ? 'accent' : '';
+}
+
+function setStatus(msg, busy = false) {
+  document.getElementById('status-text').textContent = msg;
+  document.getElementById('spin').classList.toggle('active', busy);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ═══════════════════════════════════════════════════════════════
+// Image loading
+// ═══════════════════════════════════════════════════════════════
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('click', () => document.getElementById('file-in').click());
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) loadFile(f);
+});
+document.getElementById('file-in').addEventListener('change', e => {
+  if (e.target.files[0]) loadFile(e.target.files[0]);
+});
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => loadImg(img);
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function loadImg(img) {
+  const MAX = 700;
+  // Square-crop from centre
+  const s  = Math.min(img.width, img.height);
+  const sx = (img.width  - s) / 2;
+  const sy = (img.height - s) / 2;
+  const sz = Math.min(s, MAX);
+
+  const c  = document.getElementById('preview-canvas');
+  c.width  = sz;
+  c.height = sz;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, sx, sy, s, s, 0, 0, sz, sz);
+
+  imgData = ctx.getImageData(0, 0, sz, sz);
+  imgW = imgH = sz;
+
+  c.style.display = 'block';
+  document.getElementById('drop-hint').style.display = 'none';
+  document.getElementById('gen-btn').disabled = false;
+  setStatus('Image loaded — ' + sz + '×' + sz + 'px. Ready to generate.');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Camera
+// ═══════════════════════════════════════════════════════════════
+async function openCam() {
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 800 }, height: { ideal: 800 } },
+      audio: false
+    });
+    document.getElementById('cam-video').srcObject = camStream;
+    document.getElementById('cam-overlay').classList.add('open');
+  } catch(e) { setStatus('Camera error: ' + e.message); }
+}
+
+function snapCam() {
+  const v = document.getElementById('cam-video');
+  const tmp = document.createElement('canvas');
+  tmp.width = v.videoWidth; tmp.height = v.videoHeight;
+  tmp.getContext('2d').drawImage(v, 0, 0);
+  const img = new Image();
+  img.onload = () => loadImg(img);
+  img.src = tmp.toDataURL();
+  closeCam();
+}
+
+function closeCam() {
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  document.getElementById('cam-overlay').classList.remove('open');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Image Processing Pipeline
+// ═══════════════════════════════════════════════════════════════
+
+function toGray(data, w, h) {
+  const g = new Uint8ClampedArray(w * h);
+  for (let i = 0; i < w * h; i++)
+    g[i] = 0.299 * data[i*4] + 0.587 * data[i*4+1] + 0.114 * data[i*4+2];
+  return g;
+}
+
+function boxBlur(src, w, h, r) {
+  const tmp = new Float32Array(w * h);
+  const out = new Uint8ClampedArray(w * h);
+  const inv = 1 / (2*r+1);
+  // horizontal
+  for (let y = 0; y < h; y++) {
+    let sum = 0;
+    for (let x = -r; x < r; x++) sum += src[y*w + Math.max(0,x)];
+    for (let x = 0; x < w; x++) {
+      sum += src[y*w + Math.min(w-1, x+r)];
+      sum -= src[y*w + Math.max(0, x-r-1)];
+      tmp[y*w+x] = sum * inv;
+    }
+  }
+  // vertical
+  for (let x = 0; x < w; x++) {
+    let sum = 0;
+    for (let y = -r; y < r; y++) sum += tmp[Math.max(0,y)*w + x];
+    for (let y = 0; y < h; y++) {
+      sum += tmp[Math.min(h-1, y+r)*w + x];
+      sum -= tmp[Math.max(0, y-r-1)*w + x];
+      out[y*w+x] = sum * inv;
+    }
+  }
+  return out;
+}
+
+function gaussBlur(g, w, h) {
+  // 3-pass box blur ≈ Gaussian
+  let b = boxBlur(g, w, h, 2);
+  b = boxBlur(b, w, h, 2);
+  b = boxBlur(b, w, h, 1);
+  return b;
+}
+
+function sobel(g, w, h) {
+  const mag = new Float32Array(w * h);
+  const ang = new Float32Array(w * h);
+  for (let y = 1; y < h-1; y++) {
+    for (let x = 1; x < w-1; x++) {
+      const i = y*w+x;
+      const tl=g[(y-1)*w+(x-1)], tm=g[(y-1)*w+x], tr=g[(y-1)*w+(x+1)];
+      const ml=g[y*w+(x-1)],                         mr=g[y*w+(x+1)];
+      const bl=g[(y+1)*w+(x-1)], bm=g[(y+1)*w+x], br=g[(y+1)*w+(x+1)];
+      const gx = -tl - 2*ml - bl + tr + 2*mr + br;
+      const gy = -tl - 2*tm - tr + bl + 2*bm + br;
+      mag[i] = Math.sqrt(gx*gx + gy*gy);
+      ang[i] = Math.atan2(gy, gx);
+    }
+  }
+  return { mag, ang };
+}
+
+function nms(mag, ang, w, h) {
+  const out = new Float32Array(w * h);
+  for (let y = 1; y < h-1; y++) {
+    for (let x = 1; x < w-1; x++) {
+      const i = y*w+x;
+      const m = mag[i];
+      const a = ((ang[i] * 180 / Math.PI) + 180) % 180;
+      let n1, n2;
+      if      (a <  22.5 || a >= 157.5) { n1=mag[i-1];     n2=mag[i+1]; }
+      else if (a <  67.5)               { n1=mag[i-w+1];   n2=mag[i+w-1]; }
+      else if (a < 112.5)               { n1=mag[i-w];     n2=mag[i+w]; }
+      else                              { n1=mag[i-w-1];   n2=mag[i+w+1]; }
+      if (m >= n1 && m >= n2) out[i] = m;
+    }
+  }
+  return out;
+}
+
+function canny(g, w, h, hi) {
+  const lo = hi * 0.35;
+  const { mag, ang } = sobel(g, w, h);
+  const thin = nms(mag, ang, w, h);
+
+  // Double threshold + hysteresis
+  const STRONG=255, WEAK=100;
+  const e = new Uint8ClampedArray(w * h);
+  for (let i = 0; i < e.length; i++)
+    e[i] = thin[i] >= hi ? STRONG : thin[i] >= lo ? WEAK : 0;
+
+  // Hysteresis: promote weak pixels connected to strong
+  const visited = new Uint8Array(w * h);
+  const d8 = [-w-1,-w,-w+1,-1,1,w-1,w,w+1];
+  for (let i = 0; i < e.length; i++) {
+    if (e[i] !== STRONG || visited[i]) continue;
+    const stack = [i];
+    while (stack.length) {
+      const idx = stack.pop();
+      if (visited[idx]) continue;
+      visited[idx] = 1;
+      e[idx] = STRONG;
+      for (const d of d8) {
+        const ni = idx + d;
+        if (ni >= 0 && ni < e.length && !visited[ni] && e[ni] >= WEAK)
+          stack.push(ni);
+      }
+    }
+  }
+  // Remove remaining weak
+  for (let i = 0; i < e.length; i++) if (e[i] !== STRONG) e[i] = 0;
+  return e;
+}
+
+// BFS connected components → ordered polylines
+function extractContours(edges, w, h) {
+  const visited = new Uint8Array(w * h);
+  const contours = [];
+  const D8 = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y*w+x;
+      if (edges[i] !== 255 || visited[i]) continue;
+
+      // BFS collect component
+      const comp = [];
+      const q = [[x, y]];
+      visited[i] = 1;
+      while (q.length) {
+        const [cx, cy] = q.shift();
+        comp.push([cx, cy]);
+        for (const [dy, dx] of D8) {
+          const nx=cx+dx, ny=cy+dy;
+          if (nx<0||nx>=w||ny<0||ny>=h) continue;
+          const ni = ny*w+nx;
+          if (edges[ni]!==255||visited[ni]) continue;
+          visited[ni]=1;
+          q.push([nx,ny]);
+        }
+      }
+      if (comp.length >= 4) contours.push(chainPixels(comp));
+    }
+  }
+  return contours;
+}
+
+function chainPixels(pts) {
+  if (pts.length <= 3) return pts;
+
+  // Subsample for performance (max 250 pts per chain)
+  let src = pts;
+  if (pts.length > 250) {
+    const step = Math.ceil(pts.length / 250);
+    src = pts.filter((_, i) => i % step === 0);
+  }
+
+  const used = new Uint8Array(src.length);
+  const out  = [src[0]];
+  used[0] = 1;
+  let last = src[0];
+
+  for (let iter = 1; iter < src.length; iter++) {
+    let best = Infinity, bi = -1;
+    for (let i = 0; i < src.length; i++) {
+      if (used[i]) continue;
+      const dx=src[i][0]-last[0], dy=src[i][1]-last[1];
+      const d = dx*dx + dy*dy;
+      if (d < best) { best=d; bi=i; if (d<=2) break; }
+    }
+    if (bi === -1 || best > 25) break;   // gap > 5px → stop chain
+    out.push(src[bi]);
+    used[bi] = 1;
+    last = src[bi];
+  }
+  return out;
+}
+
+// Ramer-Douglas-Peucker
+function rdp(pts, eps) {
+  if (pts.length < 3) return pts;
+  const [x1,y1] = pts[0], [x2,y2] = pts[pts.length-1];
+  const len = Math.sqrt((x2-x1)**2+(y2-y1)**2) || 1e-9;
+  let maxD=0, mi=0;
+  for (let i=1; i<pts.length-1; i++) {
+    const [px,py] = pts[i];
+    const d = Math.abs((y2-y1)*px-(x2-x1)*py+x2*y1-y2*x1) / len;
+    if (d > maxD) { maxD=d; mi=i; }
+  }
+  if (maxD > eps) {
+    const L = rdp(pts.slice(0, mi+1), eps);
+    const R = rdp(pts.slice(mi), eps);
+    return [...L.slice(0,-1), ...R];
+  }
+  return [pts[0], pts[pts.length-1]];
+}
+
+// Random stroke color (like the original project)
+function rndColor() {
+  if (colorMode === 'black') return '#111';
+  const h = Math.random()*360;
+  const s = 30 + Math.random()*50;
+  const l = 15 + Math.random()*35;
+  return `hsl(${h|0},${s|0}%,${l|0}%)`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Main entry point
+// ═══════════════════════════════════════════════════════════════
+async function processImage() {
+  if (!imgData) { setStatus('Load an image first.'); return; }
+
+  document.getElementById('gen-btn').disabled = true;
+  document.getElementById('replay-btn').style.display = 'none';
+  document.getElementById('dl-btn').style.display = 'none';
+
+  const maxPaths = +document.getElementById('s-paths').value;
+  const hiThresh = +document.getElementById('s-thresh').value;
+  const rdpPct   = +document.getElementById('s-rdp').value / 100;
+  const eps      = rdpPct * 8 + 0.5;  // 0.5 … 8.1
+
+  setStatus('Converting to grayscale…', true); await sleep(10);
+  const gray = toGray(imgData.data, imgW, imgH);
+
+  setStatus('Applying Gaussian blur…', true); await sleep(10);
+  const blurred = gaussBlur(gray, imgW, imgH);
+
+  setStatus('Running Canny edge detection…', true); await sleep(10);
+  const edges = canny(blurred, imgW, imgH, hiThresh);
+
+  setStatus('Extracting contours…', true); await sleep(10);
+  let contours = extractContours(edges, imgW, imgH);
+
+  setStatus(`Found ${contours.length} contours — sorting…`, true); await sleep(10);
+
+  // Sort by distance of centroid from image centre
+  const cx = imgW/2, cy = imgH/2;
+  contours.sort((a, b) => {
+    const ac = a.reduce((s,p)=>[s[0]+p[0],s[1]+p[1]], [0,0]);
+    const bc = b.reduce((s,p)=>[s[0]+p[0],s[1]+p[1]], [0,0]);
+    const aD = (ac[0]/a.length-cx)**2+(ac[1]/a.length-cy)**2;
+    const bD = (bc[0]/b.length-cx)**2+(bc[1]/b.length-cy)**2;
+    return aD - bD;
+  });
+  contours = contours.slice(0, maxPaths);
+
+  setStatus('Simplifying paths (RDP)…', true); await sleep(10);
+  const simplified = contours.map(c => rdp(c, eps)).filter(c => c.length >= 2);
+
+  setStatus(`Building SVG — ${simplified.length} paths…`, true); await sleep(10);
+  svgString = buildSVG(simplified, imgW, imgH);
+
+  displayAndAnimate(svgString, simplified.length);
+
+  document.getElementById('gen-btn').disabled = false;
+  document.getElementById('replay-btn').style.display = '';
+  document.getElementById('dl-btn').style.display = '';
+  document.getElementById('out-info').textContent =
+    `${simplified.length} paths · ${imgW}×${imgH}px`;
+  setStatus(`Done — ${simplified.length} paths generated.`, false);
+}
+
+function buildSVG(contours, w, h) {
+  const lines = contours.map(pts => {
+    const col = rndColor();
+    const d = pts.map((p,i) =>
+      `${i===0?'M':'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`
+    ).join(' ');
+    return `  <path d="${d}" fill="none" stroke="${col}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }).join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <rect width="${w}" height="${h}" fill="white"/>
+${lines}
+</svg>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Display + Pen-Plotter Animation
+// ═══════════════════════════════════════════════════════════════
+let currentSVGEl = null;
+
+function displayAndAnimate(svgStr, pathCount) {
+  const wrap = document.getElementById('svg-wrap');
+  const doc  = new DOMParser().parseFromString(svgStr, 'image/svg+xml');
+  const svg  = doc.documentElement;
+
+  wrap.innerHTML = '';
+  wrap.appendChild(svg);
+  currentSVGEl = svg;
+
+  animatePaths(svg, pathCount);
+}
+
+function animatePaths(svg, pathCount) {
+  const paths = svg.querySelectorAll('path');
+  const totalDuration = Math.min(4.5, 1.5 + pathCount * 0.02);
+
+  paths.forEach((path, i) => {
+    const len = path.getTotalLength();
+    path.style.strokeDasharray  = len;
+    path.style.strokeDashoffset = len;
+    const delay = (i / pathCount) * totalDuration;
+    const dur   = 0.25 + Math.random() * 0.3;
+    path.style.transition = `stroke-dashoffset ${dur}s linear ${delay}s`;
+    // Trigger
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      path.style.strokeDashoffset = 0;
+    }));
+  });
+}
+
+function animateSVG() {
+  if (!currentSVGEl) return;
+  // Reset all paths then re-animate
+  const paths = [...currentSVGEl.querySelectorAll('path')];
+  paths.forEach(p => {
+    p.style.transition = 'none';
+    p.style.strokeDashoffset = p.getTotalLength();
+  });
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    animatePaths(currentSVGEl, paths.length);
+  }));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Download
+// ═══════════════════════════════════════════════════════════════
+function downloadSVG() {
+  if (!svgString) return;
+  const blob = new Blob([svgString], { type: 'image/svg+xml' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = 'photoplotter_' + Date.now() + '.svg';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
