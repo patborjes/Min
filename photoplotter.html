@@ -141,6 +141,23 @@ button.accent { border-color: var(--accent); color: var(--accent); }
 button.accent:hover:not(:disabled) { background: var(--accent); color: #000; }
 button.accent:disabled { opacity: 0.35; cursor: default; }
 
+.file-label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.55rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.file-label:hover { border-color: var(--text); }
+
 .ctrl {
   display: flex;
   flex-direction: column;
@@ -290,12 +307,14 @@ input[type=range]::-moz-range-thumb {
           Drop a portrait photo here<br>or click to upload
         </div>
         <div class="face-badge" id="face-badge">✓ FACE DETECTED</div>
+        <!-- Transparent file input covers the whole zone — works reliably on iOS Safari -->
+        <input type="file" id="file-in" accept="image/*"
+               style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:5">
       </div>
       <div class="btn-row">
-        <button onclick="document.getElementById('file-in').click()">Upload</button>
+        <label for="file-in" class="file-label">Upload</label>
         <button onclick="openCam()">Camera</button>
       </div>
-      <input type="file" id="file-in" accept="image/*" style="display:none">
     </div>
 
     <div class="section">
@@ -411,7 +430,7 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 // Image loading
 // ═══════════════════════════════════════════════════════════════
 const dropZone = document.getElementById('drop-zone');
-dropZone.addEventListener('click', () => document.getElementById('file-in').click());
+// Drag-and-drop (desktop)
 dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('over'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
 dropZone.addEventListener('drop', e => {
@@ -419,6 +438,7 @@ dropZone.addEventListener('drop', e => {
   const f = e.dataTransfer.files[0];
   if (f && f.type.startsWith('image/')) loadFile(f);
 });
+// File input change (covers both drop-zone tap and Upload label on iOS + desktop)
 document.getElementById('file-in').addEventListener('change', e => {
   if (e.target.files[0]) loadFile(e.target.files[0]);
 });
