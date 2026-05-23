@@ -52,12 +52,10 @@ h1 {
   min-height: 0;
 }
 
-/* ── Left panel ── */
 .left {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  gap: 0;
   overflow-y: auto;
 }
 
@@ -74,7 +72,6 @@ h1 {
   margin-bottom: 0.9rem;
 }
 
-/* Drop zone */
 .drop-zone {
   aspect-ratio: 1;
   border: 1px dashed var(--border);
@@ -85,6 +82,7 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: center;
+  background: #0a0a0a;
 }
 
 .drop-zone:hover { border-color: var(--accent); }
@@ -104,6 +102,18 @@ h1 {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: none;
+}
+
+.face-badge {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  background: rgba(200,255,0,0.85);
+  color: #000;
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  letter-spacing: 0.08em;
   display: none;
 }
 
@@ -127,28 +137,16 @@ button {
 }
 
 button:hover:not(:disabled) { border-color: var(--text); }
+button.accent { border-color: var(--accent); color: var(--accent); }
+button.accent:hover:not(:disabled) { background: var(--accent); color: #000; }
+button.accent:disabled { opacity: 0.35; cursor: default; }
 
-button.accent {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-button.accent:hover:not(:disabled) {
-  background: var(--accent);
-  color: #000;
-}
-button.accent:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-/* Sliders */
 .ctrl {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
   margin-bottom: 0.9rem;
 }
-
 .ctrl:last-child { margin-bottom: 0; }
 
 .ctrl-label {
@@ -157,7 +155,6 @@ button.accent:disabled {
   font-size: 0.7rem;
   color: var(--muted);
 }
-
 .ctrl-label span:last-child { color: var(--text); }
 
 input[type=range] {
@@ -168,19 +165,15 @@ input[type=range] {
   outline: none;
   cursor: pointer;
 }
-
 input[type=range]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 12px;
-  height: 12px;
+  width: 12px; height: 12px;
   border-radius: 50%;
   background: var(--accent);
   cursor: pointer;
 }
-
 input[type=range]::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
+  width: 12px; height: 12px;
   border-radius: 50%;
   background: var(--accent);
   border: none;
@@ -195,7 +188,6 @@ input[type=range]::-moz-range-thumb {
   margin-top: 0.1rem;
 }
 
-/* Status */
 .status-bar {
   padding: 0.6rem 1.5rem;
   border-top: 1px solid var(--border);
@@ -210,21 +202,17 @@ input[type=range]::-moz-range-thumb {
 
 .spinner {
   display: none;
-  width: 10px;
-  height: 10px;
+  width: 10px; height: 10px;
   border: 1.5px solid var(--border);
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
 }
 .spinner.active { display: block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ── Right panel ── */
-.right {
-  display: flex;
-  flex-direction: column;
-}
+.right { display: flex; flex-direction: column; }
 
 .output-toolbar {
   padding: 0.7rem 1.5rem;
@@ -233,12 +221,7 @@ input[type=range]::-moz-range-thumb {
   align-items: center;
   gap: 0.75rem;
 }
-
-.output-toolbar .info {
-  font-size: 0.7rem;
-  color: var(--muted);
-  flex: 1;
-}
+.output-toolbar .info { font-size: 0.7rem; color: var(--muted); flex: 1; }
 
 #svg-wrap {
   flex: 1;
@@ -246,10 +229,9 @@ input[type=range]::-moz-range-thumb {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: #f8f8f8;
+  background: #f0f0f0;
   position: relative;
 }
-
 #svg-wrap .empty-msg {
   font-family: 'Courier New', monospace;
   font-size: 0.75rem;
@@ -257,13 +239,8 @@ input[type=range]::-moz-range-thumb {
   text-align: center;
   line-height: 2;
 }
+#svg-wrap svg { max-width: 100%; max-height: 100%; }
 
-#svg-wrap svg {
-  max-width: 100%;
-  max-height: 100%;
-}
-
-/* Camera overlay */
 .overlay {
   display: none;
   position: fixed;
@@ -274,7 +251,6 @@ input[type=range]::-moz-range-thumb {
   justify-content: center;
 }
 .overlay.open { display: flex; }
-
 .cam-box {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -284,16 +260,11 @@ input[type=range]::-moz-range-thumb {
   gap: 1rem;
   width: min(480px, 95vw);
 }
-
 #cam-video {
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  background: #000;
-  display: block;
+  width: 100%; aspect-ratio: 1;
+  object-fit: cover; background: #000; display: block;
 }
 
-/* Responsive */
 @media (max-width: 700px) {
   .main { grid-template-columns: 1fr; }
   .left { border-right: none; }
@@ -309,8 +280,6 @@ input[type=range]::-moz-range-thumb {
 </header>
 
 <div class="main">
-
-  <!-- ── LEFT ── -->
   <div class="left">
 
     <div class="section">
@@ -318,8 +287,9 @@ input[type=range]::-moz-range-thumb {
       <div class="drop-zone" id="drop-zone">
         <canvas id="preview-canvas"></canvas>
         <div class="drop-hint" id="drop-hint">
-          Drop a photo here<br>or click to upload
+          Drop a portrait photo here<br>or click to upload
         </div>
+        <div class="face-badge" id="face-badge">✓ FACE DETECTED</div>
       </div>
       <div class="btn-row">
         <button onclick="document.getElementById('file-in').click()">Upload</button>
@@ -338,15 +308,21 @@ input[type=range]::-moz-range-thumb {
       </div>
 
       <div class="ctrl">
-        <div class="ctrl-label"><span>Edge sensitivity</span><span id="v-thresh">75</span></div>
-        <input type="range" id="s-thresh" min="15" max="200" value="75">
+        <div class="ctrl-label"><span>Edge sensitivity</span><span id="v-thresh">60</span></div>
+        <input type="range" id="s-thresh" min="10" max="180" value="60">
         <div class="range-hints"><span>More edges</span><span>Fewer edges</span></div>
       </div>
 
       <div class="ctrl">
-        <div class="ctrl-label"><span>Abstraction</span><span id="v-rdp">65</span>%</div>
-        <input type="range" id="s-rdp" min="0" max="95" value="65">
+        <div class="ctrl-label"><span>Abstraction</span><span id="v-rdp">60</span>%</div>
+        <input type="range" id="s-rdp" min="0" max="95" value="60">
         <div class="range-hints"><span>Detailed</span><span>Abstract</span></div>
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-label"><span>Contrast boost (CLAHE)</span><span id="v-clahe">2.5</span>×</div>
+        <input type="range" id="s-clahe" min="10" max="80" value="25">
+        <div class="range-hints"><span>Off</span><span>Max</span></div>
       </div>
 
       <div class="ctrl">
@@ -369,7 +345,6 @@ input[type=range]::-moz-range-thumb {
     </div>
   </div>
 
-  <!-- ── RIGHT ── -->
   <div class="right">
     <div class="output-toolbar">
       <span class="info" id="out-info">No output yet</span>
@@ -382,10 +357,8 @@ input[type=range]::-moz-range-thumb {
       </div>
     </div>
   </div>
-
 </div>
 
-<!-- Camera overlay -->
 <div class="overlay" id="cam-overlay">
   <div class="cam-box">
     <div style="font-size:0.75rem;color:var(--muted);letter-spacing:0.08em">CAMERA</div>
@@ -409,19 +382,25 @@ let camStream = null;
 // ═══════════════════════════════════════════════════════════════
 // UI wiring
 // ═══════════════════════════════════════════════════════════════
-['s-paths','s-thresh','s-rdp'].forEach(id => {
+function bindSlider(id, outId, scale) {
   const el = document.getElementById(id);
-  const out = document.getElementById('v-' + id.slice(2));
-  el.addEventListener('input', () => { out.textContent = el.value; });
-});
+  const out = document.getElementById(outId);
+  el.addEventListener('input', () => {
+    out.textContent = scale ? (el.value / scale).toFixed(1) : el.value;
+  });
+}
+bindSlider('s-paths',  'v-paths',  null);
+bindSlider('s-thresh', 'v-thresh', null);
+bindSlider('s-rdp',    'v-rdp',    null);
+bindSlider('s-clahe',  'v-clahe',  10);
 
 function setColorMode(m) {
   colorMode = m;
-  document.getElementById('col-random').className = m === 'random' ? 'accent' : '';
-  document.getElementById('col-black').className  = m === 'black'  ? 'accent' : '';
+  document.getElementById('col-random').className = m==='random' ? 'accent' : '';
+  document.getElementById('col-black').className  = m==='black'  ? 'accent' : '';
 }
 
-function setStatus(msg, busy = false) {
+function setStatus(msg, busy=false) {
   document.getElementById('status-text').textContent = msg;
   document.getElementById('spin').classList.toggle('active', busy);
 }
@@ -456,15 +435,14 @@ function loadFile(file) {
 
 function loadImg(img) {
   const MAX = 700;
-  // Square-crop from centre
   const s  = Math.min(img.width, img.height);
   const sx = (img.width  - s) / 2;
   const sy = (img.height - s) / 2;
   const sz = Math.min(s, MAX);
 
-  const c  = document.getElementById('preview-canvas');
-  c.width  = sz;
-  c.height = sz;
+  const c   = document.getElementById('preview-canvas');
+  c.width   = sz;
+  c.height  = sz;
   const ctx = c.getContext('2d');
   ctx.drawImage(img, sx, sy, s, s, 0, 0, sz, sz);
 
@@ -473,8 +451,53 @@ function loadImg(img) {
 
   c.style.display = 'block';
   document.getElementById('drop-hint').style.display = 'none';
+  document.getElementById('face-badge').style.display = 'none';
   document.getElementById('gen-btn').disabled = false;
-  setStatus('Image loaded — ' + sz + '×' + sz + 'px. Ready to generate.');
+
+  setStatus('Image loaded. Checking for face…', true);
+  detectAndCropFace(c, ctx).then(() => {
+    setStatus(`Ready — ${imgW}×${imgH}px. Click Generate SVG →`);
+  });
+}
+
+// ── Face detection (Chrome/Edge FaceDetector API) ──────────────
+async function detectAndCropFace(canvas, ctx) {
+  if (!('FaceDetector' in window)) return;
+  try {
+    const detector = new FaceDetector({ fastMode: false, maxDetectedFaces: 1 });
+    const faces = await detector.detect(canvas);
+    if (!faces.length) return;
+
+    const { x, y, width, height } = faces[0].boundingBox;
+    const padX   = width  * 0.65;
+    const padTop = height * 0.75;  // room for hair
+    const padBot = height * 0.45;
+
+    const x0 = Math.max(0, x - padX);
+    const y0 = Math.max(0, y - padTop);
+    const x1 = Math.min(canvas.width,  x + width  + padX);
+    const y1 = Math.min(canvas.height, y + height + padBot);
+
+    const cropW = x1 - x0, cropH = y1 - y0;
+    const srcSize = Math.max(cropW, cropH);
+    const srcCx   = (x0 + x1) / 2, srcCy = (y0 + y1) / 2;
+    const srcX    = srcCx - srcSize / 2;
+    const srcY    = srcCy - srcSize / 2;
+    const sz      = Math.min(srcSize, 700) | 0;
+
+    const tmp = document.createElement('canvas');
+    tmp.width = tmp.height = sz;
+    tmp.getContext('2d').drawImage(canvas, srcX, srcY, srcSize, srcSize, 0, 0, sz, sz);
+
+    canvas.width  = sz;
+    canvas.height = sz;
+    ctx.drawImage(tmp, 0, 0);
+
+    imgData = ctx.getImageData(0, 0, sz, sz);
+    imgW = imgH = sz;
+
+    document.getElementById('face-badge').style.display = 'block';
+  } catch(e) { /* FaceDetector not supported or failed */ }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -508,7 +531,7 @@ function closeCam() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// Image Processing Pipeline
+// ── Image Processing Pipeline ─────────────────────────────────
 // ═══════════════════════════════════════════════════════════════
 
 function toGray(data, w, h) {
@@ -518,72 +541,132 @@ function toGray(data, w, h) {
   return g;
 }
 
-function boxBlur(src, w, h, r) {
+// Separable box blur — single pass horizontal + vertical
+function boxBlur1D(src, w, h, r) {
   const tmp = new Float32Array(w * h);
-  const out = new Uint8ClampedArray(w * h);
+  const out = new Float32Array(w * h);
   const inv = 1 / (2*r+1);
-  // horizontal
   for (let y = 0; y < h; y++) {
-    let sum = 0;
-    for (let x = -r; x < r; x++) sum += src[y*w + Math.max(0,x)];
+    let s = 0;
+    for (let x = -r; x < r; x++) s += src[y*w + Math.max(0, x)];
     for (let x = 0; x < w; x++) {
-      sum += src[y*w + Math.min(w-1, x+r)];
-      sum -= src[y*w + Math.max(0, x-r-1)];
-      tmp[y*w+x] = sum * inv;
+      s += src[y*w + Math.min(w-1, x+r)];
+      s -= src[y*w + Math.max(0, x-r-1)];
+      tmp[y*w+x] = s * inv;
     }
   }
-  // vertical
   for (let x = 0; x < w; x++) {
-    let sum = 0;
-    for (let y = -r; y < r; y++) sum += tmp[Math.max(0,y)*w + x];
+    let s = 0;
+    for (let y = -r; y < r; y++) s += tmp[Math.max(0, y)*w + x];
     for (let y = 0; y < h; y++) {
-      sum += tmp[Math.min(h-1, y+r)*w + x];
-      sum -= tmp[Math.max(0, y-r-1)*w + x];
-      out[y*w+x] = sum * inv;
+      s += tmp[Math.min(h-1, y+r)*w + x];
+      s -= tmp[Math.max(0, y-r-1)*w + x];
+      out[y*w+x] = s * inv;
     }
   }
   return out;
 }
 
 function gaussBlur(g, w, h) {
-  // 3-pass box blur ≈ Gaussian
-  let b = boxBlur(g, w, h, 2);
-  b = boxBlur(b, w, h, 2);
-  b = boxBlur(b, w, h, 1);
-  return b;
+  // 3-pass box blur approximates Gaussian
+  let f = boxBlur1D(g, w, h, 2);
+  f = boxBlur1D(f, w, h, 2);
+  f = boxBlur1D(f, w, h, 1);
+  const out = new Uint8ClampedArray(w * h);
+  for (let i = 0; i < out.length; i++) out[i] = f[i];
+  return out;
 }
 
+// ── CLAHE (Contrast Limited Adaptive Histogram Equalization) ───
+function clahe(gray, w, h, clipLimit=2.5, tileSize=48) {
+  const tilesX = Math.max(2, Math.ceil(w / tileSize));
+  const tilesY = Math.max(2, Math.ceil(h / tileSize));
+  const tw = Math.ceil(w / tilesX);
+  const th = Math.ceil(h / tilesY);
+
+  // Compute clipped + equalized LUT for each tile
+  const luts = [];
+  for (let ty = 0; ty < tilesY; ty++) {
+    const row = [];
+    for (let tx = 0; tx < tilesX; tx++) {
+      const x0=tx*tw, y0=ty*th;
+      const x1=Math.min(x0+tw, w), y1=Math.min(y0+th, h);
+      const n = (x1-x0)*(y1-y0);
+
+      const hist = new Int32Array(256);
+      for (let y=y0; y<y1; y++)
+        for (let x=x0; x<x1; x++)
+          hist[gray[y*w+x]]++;
+
+      // Clip and redistribute excess uniformly
+      const clip = Math.max(1, Math.round(clipLimit * n / 256));
+      let excess = 0;
+      for (let i=0; i<256; i++) { if (hist[i]>clip) { excess+=hist[i]-clip; hist[i]=clip; } }
+      const add = (excess/256)|0, rem = excess%256;
+      for (let i=0; i<256; i++) { hist[i]+=add; if (i<rem) hist[i]++; }
+
+      // CDF → normalised LUT
+      const lut = new Uint8ClampedArray(256);
+      let cdf=0;
+      for (let i=0; i<256; i++) { cdf+=hist[i]; lut[i]=Math.min(255, (255*cdf/n)|0); }
+      row.push(lut);
+    }
+    luts.push(row);
+  }
+
+  // Bilinear interpolation between tile LUTs
+  const out = new Uint8ClampedArray(w * h);
+  for (let y=0; y<h; y++) {
+    for (let x=0; x<w; x++) {
+      const ftx = (x + 0.5) * tilesX / w - 0.5;
+      const fty = (y + 0.5) * tilesY / h - 0.5;
+      const tx0 = Math.max(0, Math.min(tilesX-2, ftx|0));
+      const ty0 = Math.max(0, Math.min(tilesY-2, fty|0));
+      const fx  = Math.max(0, Math.min(1, ftx - tx0));
+      const fy  = Math.max(0, Math.min(1, fty - ty0));
+      const v   = gray[y*w+x];
+      out[y*w+x] = (
+        luts[ty0  ][tx0  ][v] * (1-fx) * (1-fy) +
+        luts[ty0  ][tx0+1][v] *    fx  * (1-fy) +
+        luts[ty0+1][tx0  ][v] * (1-fx) *    fy  +
+        luts[ty0+1][tx0+1][v] *    fx  *    fy
+      ) | 0;
+    }
+  }
+  return out;
+}
+
+// ── Canny edge detection ────────────────────────────────────────
 function sobel(g, w, h) {
-  const mag = new Float32Array(w * h);
-  const ang = new Float32Array(w * h);
-  for (let y = 1; y < h-1; y++) {
-    for (let x = 1; x < w-1; x++) {
-      const i = y*w+x;
+  const mag = new Float32Array(w*h);
+  const ang = new Float32Array(w*h);
+  for (let y=1; y<h-1; y++) {
+    for (let x=1; x<w-1; x++) {
+      const i=y*w+x;
       const tl=g[(y-1)*w+(x-1)], tm=g[(y-1)*w+x], tr=g[(y-1)*w+(x+1)];
       const ml=g[y*w+(x-1)],                         mr=g[y*w+(x+1)];
       const bl=g[(y+1)*w+(x-1)], bm=g[(y+1)*w+x], br=g[(y+1)*w+(x+1)];
-      const gx = -tl - 2*ml - bl + tr + 2*mr + br;
-      const gy = -tl - 2*tm - tr + bl + 2*bm + br;
-      mag[i] = Math.sqrt(gx*gx + gy*gy);
-      ang[i] = Math.atan2(gy, gx);
+      const gx = -tl-2*ml-bl+tr+2*mr+br;
+      const gy = -tl-2*tm-tr+bl+2*bm+br;
+      mag[i] = Math.sqrt(gx*gx+gy*gy);
+      ang[i] = Math.atan2(gy,gx);
     }
   }
   return { mag, ang };
 }
 
 function nms(mag, ang, w, h) {
-  const out = new Float32Array(w * h);
-  for (let y = 1; y < h-1; y++) {
-    for (let x = 1; x < w-1; x++) {
-      const i = y*w+x;
-      const m = mag[i];
-      const a = ((ang[i] * 180 / Math.PI) + 180) % 180;
+  const out = new Float32Array(w*h);
+  for (let y=1; y<h-1; y++) {
+    for (let x=1; x<w-1; x++) {
+      const i=y*w+x, m=mag[i];
+      const a = ((ang[i]*180/Math.PI)+180)%180;
       let n1, n2;
-      if      (a <  22.5 || a >= 157.5) { n1=mag[i-1];     n2=mag[i+1]; }
-      else if (a <  67.5)               { n1=mag[i-w+1];   n2=mag[i+w-1]; }
-      else if (a < 112.5)               { n1=mag[i-w];     n2=mag[i+w]; }
-      else                              { n1=mag[i-w-1];   n2=mag[i+w+1]; }
-      if (m >= n1 && m >= n2) out[i] = m;
+      if      (a< 22.5||a>=157.5) { n1=mag[i-1];     n2=mag[i+1]; }
+      else if (a< 67.5)           { n1=mag[i-w+1];   n2=mag[i+w-1]; }
+      else if (a<112.5)           { n1=mag[i-w];     n2=mag[i+w]; }
+      else                        { n1=mag[i-w-1];   n2=mag[i+w+1]; }
+      if (m>=n1 && m>=n2) out[i]=m;
     }
   }
   return out;
@@ -594,129 +677,117 @@ function canny(g, w, h, hi) {
   const { mag, ang } = sobel(g, w, h);
   const thin = nms(mag, ang, w, h);
 
-  // Double threshold + hysteresis
   const STRONG=255, WEAK=100;
-  const e = new Uint8ClampedArray(w * h);
-  for (let i = 0; i < e.length; i++)
-    e[i] = thin[i] >= hi ? STRONG : thin[i] >= lo ? WEAK : 0;
+  const e = new Uint8ClampedArray(w*h);
+  for (let i=0; i<e.length; i++)
+    e[i] = thin[i]>=hi ? STRONG : thin[i]>=lo ? WEAK : 0;
 
-  // Hysteresis: promote weak pixels connected to strong
-  const visited = new Uint8Array(w * h);
+  const visited = new Uint8Array(w*h);
   const d8 = [-w-1,-w,-w+1,-1,1,w-1,w,w+1];
-  for (let i = 0; i < e.length; i++) {
-    if (e[i] !== STRONG || visited[i]) continue;
-    const stack = [i];
-    while (stack.length) {
-      const idx = stack.pop();
+  for (let i=0; i<e.length; i++) {
+    if (e[i]!==STRONG||visited[i]) continue;
+    const stk=[i];
+    while (stk.length) {
+      const idx=stk.pop();
       if (visited[idx]) continue;
-      visited[idx] = 1;
-      e[idx] = STRONG;
+      visited[idx]=1; e[idx]=STRONG;
       for (const d of d8) {
-        const ni = idx + d;
-        if (ni >= 0 && ni < e.length && !visited[ni] && e[ni] >= WEAK)
-          stack.push(ni);
+        const ni=idx+d;
+        if (ni>=0&&ni<e.length&&!visited[ni]&&e[ni]>=WEAK) stk.push(ni);
       }
     }
   }
-  // Remove remaining weak
-  for (let i = 0; i < e.length; i++) if (e[i] !== STRONG) e[i] = 0;
+  for (let i=0; i<e.length; i++) if (e[i]!==STRONG) e[i]=0;
   return e;
 }
 
-// BFS connected components → ordered polylines
-function extractContours(edges, w, h) {
-  const visited = new Uint8Array(w * h);
+// ── Direction-guided edge tracing (replaces BFS+nearest-neighbour) ──
+function traceContours(edges, w, h) {
+  const visited = new Uint8Array(w*h);
   const contours = [];
   const D8 = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
 
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const i = y*w+x;
-      if (edges[i] !== 255 || visited[i]) continue;
+  function nbrs(x, y) {
+    const ns=[];
+    for (const [dy,dx] of D8) {
+      const nx=x+dx, ny=y+dy;
+      if (nx>=0&&nx<w&&ny>=0&&ny<h&&edges[ny*w+nx]===255) ns.push([nx,ny]);
+    }
+    return ns;
+  }
 
-      // BFS collect component
-      const comp = [];
-      const q = [[x, y]];
-      visited[i] = 1;
-      while (q.length) {
-        const [cx, cy] = q.shift();
-        comp.push([cx, cy]);
-        for (const [dy, dx] of D8) {
-          const nx=cx+dx, ny=cy+dy;
-          if (nx<0||nx>=w||ny<0||ny>=h) continue;
-          const ni = ny*w+nx;
-          if (edges[ni]!==255||visited[ni]) continue;
-          visited[ni]=1;
-          q.push([nx,ny]);
+  // Pre-compute degree for every edge pixel
+  const deg = new Uint8Array(w*h);
+  for (let y=0; y<h; y++)
+    for (let x=0; x<w; x++)
+      if (edges[y*w+x]===255) deg[y*w+x]=nbrs(x,y).length;
+
+  // Trace a single chain from (sx,sy), guided by local direction
+  function trace(sx, sy) {
+    const pts=[[sx,sy]];
+    visited[sy*w+sx]=1;
+    let cx=sx, cy=sy, pdx=0, pdy=0;
+    for (;;) {
+      const ns = nbrs(cx,cy).filter(([nx,ny])=>!visited[ny*w+nx]);
+      if (!ns.length) break;
+      let [nx,ny]=ns[0];
+      if (ns.length>1 && (pdx||pdy)) {
+        let best=-Infinity;
+        for (const [qx,qy] of ns) {
+          const dot=(qx-cx)*pdx+(qy-cy)*pdy;
+          if (dot>best) { best=dot; nx=qx; ny=qy; }
         }
       }
-      if (comp.length >= 4) contours.push(chainPixels(comp));
+      pdx=nx-cx; pdy=ny-cy;
+      visited[ny*w+nx]=1;
+      pts.push([nx,ny]);
+      cx=nx; cy=ny;
+    }
+    return pts;
+  }
+
+  // Pass 1: start from endpoints (deg=1) — gives cleanest chains
+  // Pass 2: pick up any remaining edge pixels (loops, junctions)
+  for (let pass=0; pass<2; pass++) {
+    for (let y=0; y<h; y++) {
+      for (let x=0; x<w; x++) {
+        const i=y*w+x;
+        if (edges[i]!==255||visited[i]) continue;
+        if (pass===0 && deg[i]!==1) continue;
+        const chain=trace(x,y);
+        if (chain.length>=4) contours.push(chain);
+      }
     }
   }
   return contours;
 }
 
-function chainPixels(pts) {
-  if (pts.length <= 3) return pts;
-
-  // Subsample for performance (max 250 pts per chain)
-  let src = pts;
-  if (pts.length > 250) {
-    const step = Math.ceil(pts.length / 250);
-    src = pts.filter((_, i) => i % step === 0);
-  }
-
-  const used = new Uint8Array(src.length);
-  const out  = [src[0]];
-  used[0] = 1;
-  let last = src[0];
-
-  for (let iter = 1; iter < src.length; iter++) {
-    let best = Infinity, bi = -1;
-    for (let i = 0; i < src.length; i++) {
-      if (used[i]) continue;
-      const dx=src[i][0]-last[0], dy=src[i][1]-last[1];
-      const d = dx*dx + dy*dy;
-      if (d < best) { best=d; bi=i; if (d<=2) break; }
-    }
-    if (bi === -1 || best > 25) break;   // gap > 5px → stop chain
-    out.push(src[bi]);
-    used[bi] = 1;
-    last = src[bi];
-  }
-  return out;
-}
-
-// Ramer-Douglas-Peucker
+// ── Ramer-Douglas-Peucker simplification ───────────────────────
 function rdp(pts, eps) {
-  if (pts.length < 3) return pts;
-  const [x1,y1] = pts[0], [x2,y2] = pts[pts.length-1];
-  const len = Math.sqrt((x2-x1)**2+(y2-y1)**2) || 1e-9;
+  if (pts.length<3) return pts;
+  const [x1,y1]=pts[0], [x2,y2]=pts[pts.length-1];
+  const len=Math.sqrt((x2-x1)**2+(y2-y1)**2)||1e-9;
   let maxD=0, mi=0;
-  for (let i=1; i<pts.length-1; i++) {
-    const [px,py] = pts[i];
-    const d = Math.abs((y2-y1)*px-(x2-x1)*py+x2*y1-y2*x1) / len;
-    if (d > maxD) { maxD=d; mi=i; }
+  for (let i=1;i<pts.length-1;i++) {
+    const [px,py]=pts[i];
+    const d=Math.abs((y2-y1)*px-(x2-x1)*py+x2*y1-y2*x1)/len;
+    if (d>maxD) { maxD=d; mi=i; }
   }
-  if (maxD > eps) {
-    const L = rdp(pts.slice(0, mi+1), eps);
-    const R = rdp(pts.slice(mi), eps);
-    return [...L.slice(0,-1), ...R];
+  if (maxD>eps) {
+    const L=rdp(pts.slice(0,mi+1),eps);
+    const R=rdp(pts.slice(mi),eps);
+    return [...L.slice(0,-1),...R];
   }
-  return [pts[0], pts[pts.length-1]];
+  return [pts[0],pts[pts.length-1]];
 }
 
-// Random stroke color (like the original project)
 function rndColor() {
-  if (colorMode === 'black') return '#111';
-  const h = Math.random()*360;
-  const s = 30 + Math.random()*50;
-  const l = 15 + Math.random()*35;
-  return `hsl(${h|0},${s|0}%,${l|0}%)`;
+  if (colorMode==='black') return '#111';
+  return `hsl(${(Math.random()*360)|0},${(30+Math.random()*50)|0}%,${(15+Math.random()*35)|0}%)`;
 }
 
 // ═══════════════════════════════════════════════════════════════
-// Main entry point
+// Main pipeline
 // ═══════════════════════════════════════════════════════════════
 async function processImage() {
   if (!imgData) { setStatus('Load an image first.'); return; }
@@ -725,58 +796,61 @@ async function processImage() {
   document.getElementById('replay-btn').style.display = 'none';
   document.getElementById('dl-btn').style.display = 'none';
 
-  const maxPaths = +document.getElementById('s-paths').value;
-  const hiThresh = +document.getElementById('s-thresh').value;
-  const rdpPct   = +document.getElementById('s-rdp').value / 100;
-  const eps      = rdpPct * 8 + 0.5;  // 0.5 … 8.1
+  const maxPaths  = +document.getElementById('s-paths').value;
+  const hiThresh  = +document.getElementById('s-thresh').value;
+  const rdpPct    = +document.getElementById('s-rdp').value / 100;
+  const clipLimit = +document.getElementById('s-clahe').value / 10;
+  const eps       = rdpPct * 7 + 0.4;
 
-  setStatus('Converting to grayscale…', true); await sleep(10);
+  setStatus('Grayscale…', true); await sleep(10);
   const gray = toGray(imgData.data, imgW, imgH);
 
-  setStatus('Applying Gaussian blur…', true); await sleep(10);
-  const blurred = gaussBlur(gray, imgW, imgH);
+  setStatus('CLAHE contrast enhancement…', true); await sleep(10);
+  const enhanced = clipLimit > 0.5 ? clahe(gray, imgW, imgH, clipLimit) : gray;
 
-  setStatus('Running Canny edge detection…', true); await sleep(10);
+  setStatus('Gaussian blur…', true); await sleep(10);
+  const blurred = gaussBlur(enhanced, imgW, imgH);
+
+  setStatus('Canny edge detection…', true); await sleep(10);
   const edges = canny(blurred, imgW, imgH, hiThresh);
 
-  setStatus('Extracting contours…', true); await sleep(10);
-  let contours = extractContours(edges, imgW, imgH);
+  setStatus('Tracing contours…', true); await sleep(10);
+  let contours = traceContours(edges, imgW, imgH);
 
-  setStatus(`Found ${contours.length} contours — sorting…`, true); await sleep(10);
+  setStatus(`${contours.length} contours — sorting by distance from centre…`, true); await sleep(10);
 
-  // Sort by distance of centroid from image centre
-  const cx = imgW/2, cy = imgH/2;
-  contours.sort((a, b) => {
-    const ac = a.reduce((s,p)=>[s[0]+p[0],s[1]+p[1]], [0,0]);
-    const bc = b.reduce((s,p)=>[s[0]+p[0],s[1]+p[1]], [0,0]);
-    const aD = (ac[0]/a.length-cx)**2+(ac[1]/a.length-cy)**2;
-    const bD = (bc[0]/b.length-cx)**2+(bc[1]/b.length-cy)**2;
-    return aD - bD;
+  const cx=imgW/2, cy=imgH/2;
+  contours.sort((a,b) => {
+    const [asx,asy]=a.reduce(([sx,sy],[px,py])=>[sx+px,sy+py],[0,0]);
+    const [bsx,bsy]=b.reduce(([sx,sy],[px,py])=>[sx+px,sy+py],[0,0]);
+    const aD=(asx/a.length-cx)**2+(asy/a.length-cy)**2;
+    const bD=(bsx/b.length-cx)**2+(bsy/b.length-cy)**2;
+    return aD-bD;
   });
   contours = contours.slice(0, maxPaths);
 
-  setStatus('Simplifying paths (RDP)…', true); await sleep(10);
-  const simplified = contours.map(c => rdp(c, eps)).filter(c => c.length >= 2);
+  setStatus('RDP simplification…', true); await sleep(10);
+  const simplified = contours.map(c=>rdp(c,eps)).filter(c=>c.length>=2);
 
-  setStatus(`Building SVG — ${simplified.length} paths…`, true); await sleep(10);
+  setStatus('Building SVG…', true); await sleep(10);
   svgString = buildSVG(simplified, imgW, imgH);
-
   displayAndAnimate(svgString, simplified.length);
 
   document.getElementById('gen-btn').disabled = false;
   document.getElementById('replay-btn').style.display = '';
   document.getElementById('dl-btn').style.display = '';
   document.getElementById('out-info').textContent =
-    `${simplified.length} paths · ${imgW}×${imgH}px`;
-  setStatus(`Done — ${simplified.length} paths generated.`, false);
+    `${simplified.length} paths · ${imgW}×${imgH}px · CLAHE ${clipLimit.toFixed(1)}×`;
+  setStatus(`Done — ${simplified.length} paths.`, false);
 }
 
+// ═══════════════════════════════════════════════════════════════
+// SVG build + animate
+// ═══════════════════════════════════════════════════════════════
 function buildSVG(contours, w, h) {
   const lines = contours.map(pts => {
     const col = rndColor();
-    const d = pts.map((p,i) =>
-      `${i===0?'M':'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`
-    ).join(' ');
+    const d = pts.map((p,i)=>`${i?'L':'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
     return `  <path d="${d}" fill="none" stroke="${col}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>`;
   }).join('\n');
 
@@ -787,35 +861,28 @@ ${lines}
 </svg>`;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// Display + Pen-Plotter Animation
-// ═══════════════════════════════════════════════════════════════
 let currentSVGEl = null;
 
 function displayAndAnimate(svgStr, pathCount) {
   const wrap = document.getElementById('svg-wrap');
   const doc  = new DOMParser().parseFromString(svgStr, 'image/svg+xml');
   const svg  = doc.documentElement;
-
   wrap.innerHTML = '';
   wrap.appendChild(svg);
   currentSVGEl = svg;
-
   animatePaths(svg, pathCount);
 }
 
 function animatePaths(svg, pathCount) {
   const paths = svg.querySelectorAll('path');
-  const totalDuration = Math.min(4.5, 1.5 + pathCount * 0.02);
-
+  const total = Math.min(5, 1.2 + pathCount * 0.025);
   paths.forEach((path, i) => {
-    const len = path.getTotalLength();
+    const len   = path.getTotalLength();
+    const delay = (i / pathCount) * total;
+    const dur   = 0.2 + Math.random() * 0.35;
     path.style.strokeDasharray  = len;
     path.style.strokeDashoffset = len;
-    const delay = (i / pathCount) * totalDuration;
-    const dur   = 0.25 + Math.random() * 0.3;
     path.style.transition = `stroke-dashoffset ${dur}s linear ${delay}s`;
-    // Trigger
     requestAnimationFrame(() => requestAnimationFrame(() => {
       path.style.strokeDashoffset = 0;
     }));
@@ -824,20 +891,13 @@ function animatePaths(svg, pathCount) {
 
 function animateSVG() {
   if (!currentSVGEl) return;
-  // Reset all paths then re-animate
   const paths = [...currentSVGEl.querySelectorAll('path')];
-  paths.forEach(p => {
-    p.style.transition = 'none';
-    p.style.strokeDashoffset = p.getTotalLength();
-  });
+  paths.forEach(p => { p.style.transition='none'; p.style.strokeDashoffset=p.getTotalLength(); });
   requestAnimationFrame(() => requestAnimationFrame(() => {
     animatePaths(currentSVGEl, paths.length);
   }));
 }
 
-// ═══════════════════════════════════════════════════════════════
-// Download
-// ═══════════════════════════════════════════════════════════════
 function downloadSVG() {
   if (!svgString) return;
   const blob = new Blob([svgString], { type: 'image/svg+xml' });
