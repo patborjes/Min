@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interaktiv Planvisning</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #1a1a2e;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #header {
+    background: #16213e;
+    color: #e0e0e0;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 1px solid #0f3460;
+    z-index: 10;
+    flex-shrink: 0;
+  }
+
+  #header h1 {
+    font-size: 1rem;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #a0c4ff;
+  }
+
+  #header span {
+    font-size: 0.8rem;
+    color: #666;
+  }
+
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+
+  #plan-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    cursor: default;
+  }
+
+  #plan-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center;
+    display: block;
+    user-select: none;
+  }
+
+  #svg-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .room-area {
+    fill: rgba(100, 180, 255, 0.0);
+    stroke: rgba(100, 180, 255, 0.0);
+    stroke-width: 1.5;
+    cursor: pointer;
+    pointer-events: all;
+    transition: fill 0.2s, stroke 0.2s;
+  }
+
+  .room-area:hover {
+    fill: rgba(100, 180, 255, 0.18);
+    stroke: rgba(100, 180, 255, 0.7);
+  }
+
+  .room-area.active {
+    fill: rgba(100, 220, 180, 0.22);
+    stroke: rgba(100, 220, 180, 0.9);
+    stroke-width: 2;
+  }
+
+  /* Side panel */
+  #panel {
+    width: 380px;
+    background: #16213e;
+    border-left: 1px solid #0f3460;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 20;
+    overflow: hidden;
+  }
+
+  #panel.open {
+    transform: translateX(0);
+  }
+
+  #panel-close {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    background: none;
+    border: none;
+    color: #666;
+    font-size: 1.3rem;
+    cursor: pointer;
+    z-index: 2;
+    line-height: 1;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: color 0.2s, background 0.2s;
+  }
+  #panel-close:hover { color: #fff; background: rgba(255,255,255,0.08); }
+
+  #room-render {
+    height: 220px;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+    background: #0f1b2d;
+  }
+
+  #room-canvas {
+    width: 100%;
+    height: 100%;
+  }
+
+  #panel-info {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+  }
+
+  #panel-info::-webkit-scrollbar { width: 4px; }
+  #panel-info::-webkit-scrollbar-track { background: transparent; }
+  #panel-info::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 2px; }
+
+  .room-tag {
+    display: inline-block;
+    background: #0f3460;
+    color: #a0c4ff;
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  #panel-name {
+    font-size: 1.4rem;
+    color: #e0e0e0;
+    font-weight: 600;
+    margin-bottom: 4px;
+    line-height: 1.2;
+  }
+
+  #panel-area {
+    font-size: 0.85rem;
+    color: #7090b0;
+    margin-bottom: 16px;
+  }
+
+  #panel-desc {
+    font-size: 0.88rem;
+    color: #a0b4c8;
+    line-height: 1.7;
+    margin-bottom: 20px;
+  }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .detail-card {
+    background: #0f1b2d;
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid #0f3460;
+  }
+
+  .detail-card .label {
+    font-size: 0.7rem;
+    color: #506070;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 4px;
+  }
+
+  .detail-card .value {
+    font-size: 0.95rem;
+    color: #c0d0e0;
+    font-weight: 500;
+  }
+
+  .features-title {
+    font-size: 0.75rem;
+    color: #506070;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 10px;
+  }
+
+  .feature-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 0;
+    border-bottom: 1px solid #0f1b2d;
+    font-size: 0.85rem;
+    color: #90a8c0;
+  }
+
+  .feature-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #a0c4ff;
+    flex-shrink: 0;
+  }
+
+  #hint {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(22, 33, 62, 0.85);
+    color: #7090b0;
+    font-size: 0.78rem;
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: 1px solid #0f3460;
+    pointer-events: none;
+    transition: opacity 0.5s;
+    white-space: nowrap;
+  }
+
+  #hint.hidden { opacity: 0; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>Planvisning — Etasje 1</h1>
+  <span>Klikk på et rom for å se ferdig utseende</span>
+</div>
+
+<div id="main">
+  <div id="plan-container">
+    <img id="plan-img" src="floorplan.jpg" alt="Plantegning" draggable="false">
+    <svg id="svg-overlay" viewBox="0 0 1224 871" preserveAspectRatio="xMidYMid meet">
+      <!-- Room hotspots - coordinates relative to 1224x871 image -->
+
+      <!-- Celle offices - top left column -->
+      <rect class="room-area" data-room="celle-1" x="22" y="55" width="72" height="65" rx="3"/>
+      <rect class="room-area" data-room="celle-2" x="100" y="55" width="60" height="65" rx="3"/>
+      <rect class="room-area" data-room="celle-3" x="165" y="55" width="62" height="65" rx="3"/>
+      <rect class="room-area" data-room="celle-4" x="230" y="55" width="60" height="65" rx="3"/>
+      <rect class="room-area" data-room="celle-5" x="295" y="55" width="72" height="65" rx="3"/>
+      <rect class="room-area" data-room="celle-6" x="22" y="128" width="72" height="65" rx="3"/>
+      <rect class="room-area" data-room="celle-7" x="100" y="128" width="125" height="65" rx="3"/>
+      <rect class="room-area" data-room="celle-8" x="22" y="200" width="72" height="65" rx="3"/>
+      <rect class="room-area" data-room="celle-9" x="100" y="200" width="125" height="65" rx="3"/>
+      <rect class="room-area" data-room="celle-10" x="22" y="272" width="72" height="65" rx="3"/>
+      <rect class="room-area" data-room="celle-11" x="100" y="272" width="125" height="65" rx="3"/>
+      <rect class="room-area" data-room="celle-12" x="22" y="344" width="72" height="65" rx="3"/>
+
+      <!-- Restor/Rector 101 - large open office -->
+      <rect class="room-area" data-room="rektor" x="150" y="155" width="215" height="220" rx="3"/>
+
+      <!-- Møterom -->
+      <rect class="room-area" data-room="moterom" x="300" y="178" width="100" height="90" rx="3"/>
+
+      <!-- HOVEDSAL - main hall -->
+      <rect class="room-area" data-room="hovedsal" x="440" y="38" width="310" height="340" rx="3"/>
+
+      <!-- Gang/Sone -->
+      <rect class="room-area" data-room="gang" x="760" y="42" width="95" height="90" rx="3"/>
+
+      <!-- Lagring -->
+      <rect class="room-area" data-room="lagring" x="860" y="42" width="115" height="115" rx="3"/>
+
+      <!-- Vornemtak -->
+      <rect class="room-area" data-room="vornemtak" x="980" y="42" width="210" height="165" rx="3"/>
+
+      <!-- HVAC -->
+      <rect class="room-area" data-room="hvac" x="890" y="165" width="120" height="100" rx="3"/>
+
+      <!-- Staircase/Lobby area center -->
+      <rect class="room-area" data-room="lobby" x="368" y="340" width="210" height="130" rx="3"/>
+
+      <!-- Mullrom corridor -->
+      <rect class="room-area" data-room="mullrom" x="580" y="380" width="355" height="150" rx="3"/>
+
+      <!-- Foaje - large foyer bottom left -->
+      <rect class="room-area" data-room="foaje" x="22" y="500" width="220" height="330" rx="3"/>
+
+      <!-- Matsson -->
+      <rect class="room-area" data-room="matsson" x="370" y="500" width="90" height="70" rx="3"/>
+
+      <!-- Mulitvertaled 125 -->
+      <rect class="room-area" data-room="mulitvertaled" x="370" y="575" width="195" height="135" rx="3"/>
+
+      <!-- BPG 164 -->
+      <rect class="room-area" data-room="bpg" x="570" y="545" width="145" height="160" rx="3"/>
+
+      <!-- Restjmelager 107 -->
+      <rect class="room-area" data-room="restlager" x="718" y="500" width="140" height="150" rx="3"/>
+
+      <!-- Gosen Room 115 -->
+      <rect class="room-area" data-room="gosen" x="858" y="500" width="130" height="120" rx="3"/>
+
+      <!-- WC/Bade -->
+      <rect class="room-area" data-room="wc" x="990" y="500" width="75" height="120" rx="3"/>
+
+      <!-- Garderobe 119 -->
+      <rect class="room-area" data-room="garderobe" x="858" y="625" width="130" height="110" rx="3"/>
+
+      <!-- Treningsgoom 100 -->
+      <rect class="room-area" data-room="trening" x="670" y="670" width="180" height="160" rx="3"/>
+
+      <!-- Geoterober 100 -->
+      <rect class="room-area" data-room="geiter" x="855" y="740" width="200" height="110" rx="3"/>
+
+      <!-- Vestarom -->
+      <rect class="room-area" data-room="vestarom" x="1060" y="625" width="130" height="220" rx="3"/>
+
+    </svg>
+    <div id="hint">Pek på et rom for å utforske</div>
+  </div>
+
+  <div id="panel">
+    <button id="panel-close">✕</button>
+    <div id="room-render">
+      <canvas id="room-canvas"></canvas>
+    </div>
+    <div id="panel-info">
+      <div class="room-tag" id="panel-tag">Rom</div>
+      <div id="panel-name">Romnavn</div>
+      <div id="panel-area">— m²</div>
+      <div id="panel-desc"></div>
+      <div class="detail-grid" id="detail-grid"></div>
+      <div class="features-title">Innhold og utstyr</div>
+      <div id="features-list"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const rooms = {
+  "celle-1": {
+    name: "Celle 1", tag: "Kontor", area: "12,6 m²",
+    desc: "Privat cellekontor med naturlig lysinnfall fra fasaden. Passer for én person med behov for konsentrasjon og arbeidsro.",
+    details: [
+      {label: "Kapasitet", value: "1 person"},
+      {label: "Lys", value: "Naturlig + LED"},
+      {label: "Etasje", value: "1"},
+      {label: "Orientering", value: "Nord-vest"},
+    ],
+    features: ["Skrivebord med ergonomisk stol","Hyller og arkivskap","Nettverkspunkt og strøm","Akustisk himlingsplate","Glassdør med persienne"],
+    colors: {wall: "#e8e0d5", floor: "#b8956a", ceiling: "#f5f2ee", accent: "#5a8a6a"},
+    furniture: "office"
+  },
+  "celle-2": {
+    name: "Celle 2", tag: "Kontor", area: "7,9 m²",
+    desc: "Kompakt kontor for individuelle arbeidsoppgaver. Effektiv utnyttelse av arealet gir gode arbeidsforhold.",
+    details: [{label:"Kapasitet",value:"1 person"},{label:"Lys",value:"Naturlig + LED"},{label:"Etasje",value:"1"},{label:"Type",value:"Cellekontor"}],
+    features: ["Skrivebord","Stol","Hylle","Nettverkspunkt"],
+    colors: {wall: "#dde8e0", floor: "#b8956a", ceiling: "#f0f4f1", accent: "#4a7a8a"},
+    furniture: "office"
+  },
+  "celle-3": {
+    name: "Celle 3", tag: "Kontor", area: "8,8 m²",
+    desc: "Privat kontor med vindusrekke mot fasaden. Lyse og trivelige omgivelser.",
+    details: [{label:"Kapasitet",value:"1 person"},{label:"Lys",value:"Naturlig + LED"},{label:"Etasje",value:"1"},{label:"Type",value:"Cellekontor"}],
+    features: ["Skrivebord","Stol","Arkivskap","Strøm og nett"],
+    colors: {wall: "#e0dde8", floor: "#b8956a", ceiling: "#f2f0f5", accent: "#7a5a8a"},
+    furniture: "office"
+  },
+  "celle-4": {
+    name: "Celle 4", tag: "Kontor", area: "8,5 m²",
+    desc: "Fleksibelt cellekontor tilpasset administrasjon og fagarbeid.",
+    details: [{label:"Kapasitet",value:"1 person"},{label:"Lys",value:"Naturlig + LED"},{label:"Etasje",value:"1"},{label:"Type",value:"Cellekontor"}],
+    features: ["Arbeidsstasjon","Møterom nærhet","Stille sone"],
+    colors: {wall: "#e8e5d5", floor: "#b8956a", ceiling: "#f5f3ee", accent: "#8a7a4a"},
+    furniture: "office"
+  },
+  "celle-5": {
+    name: "Celle 5", tag: "Kontor", area: "12,5 m²",
+    desc: "Hjørnekontor med god plass og dobbelt lysinnfall fra to sider.",
+    details: [{label:"Kapasitet",value:"1–2 person"},{label:"Lys",value:"To vindusretninger"},{label:"Etasje",value:"1"},{label:"Type",value:"Hjørnekontor"}],
+    features: ["Romslig arbeidsplass","Møtekrok","Tavle","Akustikkelementer"],
+    colors: {wall: "#d5e2e8", floor: "#b8956a", ceiling: "#eef3f5", accent: "#4a6a8a"},
+    furniture: "office"
+  },
+  "celle-6": {  name:"Celle 6",tag:"Kontor",area:"12,6 m²",desc:"Kontor med utsyn til indre korridor og dagslys fra fasaden.",details:[{label:"Kapasitet",value:"1 person"},{label:"Lys",value:"Naturlig"},{label:"Etasje",value:"1"},{label:"Type",value:"Cellekontor"}],features:["Skrivebord","Stol","Bokhylle","PC-plass"],colors:{wall:"#e8ddd5",floor:"#a08060",ceiling:"#f5eeea",accent:"#8a5a4a"},furniture:"office"},
+  "celle-7": {  name:"Celle 7+8",tag:"Kontor",area:"12,5 m²",desc:"Dobbelt kontor med fleksibel innredning for to ansatte.",details:[{label:"Kapasitet",value:"2 personer"},{label:"Lys",value:"Naturlig"},{label:"Etasje",value:"1"},{label:"Type",value:"Delt kontor"}],features:["To arbeidsstasjoner","Skillevegg","Felles hylle","Nettverkspunkt"],colors:{wall:"#dde8e5",floor:"#a08060",ceiling:"#f0f5f3",accent:"#4a8a7a"},furniture:"office"},
+  "celle-8": {  name:"Celle 9",tag:"Kontor",area:"12,5 m²",desc:"Kontor tilpasset faglig arbeid med rolig beliggenhet.",details:[{label:"Kapasitet",value:"1 person"},{label:"Lys",value:"Naturlig"},{label:"Etasje",value:"1"},{label:"Type",value:"Cellekontor"}],features:["Arbeidsplass","Arkivsystem","Vindu mot fasade"],colors:{wall:"#e5e8dd",floor:"#a08060",ceiling:"#f3f5f0",accent:"#6a8a4a"},furniture:"office"},
+  "celle-9": {  name:"Celle 10+11",tag:"Kontor",area:"12,9 m²",desc:"Dobbelkontor med god arbeidsflyt og naturlig lys.",details:[{label:"Kapasitet",value:"2 personer"},{label:"Lys",value:"Naturlig"},{label:"Etasje",value:"1"},{label:"Type",value:"Delt kontor"}],features:["To pulter","Felles hyllerekke","Hvitt gjerde"],colors:{wall:"#e8e5d5",floor:"#a08060",ceiling:"#f5f3ee",accent:"#8a6a4a"},furniture:"office"},
+  "celle-10":{  name:"Celle 12",tag:"Kontor",area:"12,7 m²",desc:"Kontor med utsyn og god tilgang til fellesarealene.",details:[{label:"Kapasitet",value:"1 person"},{label:"Lys",value:"Naturlig"},{label:"Etasje",value:"1"},{label:"Type",value:"Cellekontor"}],features:["Skrivebord","Stol","Hylle"],colors:{wall:"#d5dde8",floor:"#a08060",ceiling:"#eef0f5",accent:"#4a5a8a"},furniture:"office"},
+  "celle-11":{  name:"Celle 13+14",tag:"Kontor",area:"12,5 m²",desc:"Fleksibelt dobbeltkontor.",details:[{label:"Kapasitet",value:"2 personer"},{label:"Lys",value:"Naturlig"},{label:"Etasje",value:"1"},{label:"Type",value:"Delt kontor"}],features:["To arbeidsstasjoner","Hyller","Nett+strøm"],colors:{wall:"#e8d5dd",floor:"#a08060",ceiling:"#f5eef2",accent:"#8a4a6a"},furniture:"office"},
+  "celle-12":{  name:"Celle 15",tag:"Kontor",area:"12,5 m²",desc:"Hjørnekontor med god oversikt.",details:[{label:"Kapasitet",value:"1 person"},{label:"Lys",value:"Naturlig"},{label:"Etasje",value:"1"},{label:"Type",value:"Hjørnekontor"}],features:["Bred arbeidsplass","Utsyn to retninger","Møblerbar hjørnekrok"],colors:{wall:"#dde8d5",floor:"#a08060",ceiling:"#f0f5ee",accent:"#4a8a4a"},furniture:"office"},
+
+  "rektor": {
+    name: "Rektorat 101", tag: "Åpent kontorlandskap", area: "260,2 m²",
+    desc: "Stort åpent kontorlandskap med plass til 18 arbeidsplasser. Tilrettelagt for samarbeid og fleksibel arbeidsform med varierte soner for fokus og møter.",
+    details: [{label:"Kapasitet",value:"18 arbeidsplasser"},{label:"Lys",value:"LED + dagslys"},{label:"Etasje",value:"1"},{label:"Areal",value:"260,2 m²"}],
+    features: ["18 ergonomiske arbeidsstasjoner","Stille soner og samarbeidssoner","Stå/sitte bord","Whiteboards og prosjektvegg","Akustikkpaneler i himling","Nærhet til møterom"],
+    colors: {wall: "#f0ece6", floor: "#c8a882", ceiling: "#faf8f5", accent: "#7a9a6a"},
+    furniture: "openoffice"
+  },
+
+  "moterom": {
+    name: "Møterom", tag: "Møterom", area: "24,5 m²",
+    desc: "Funksjonelt møterom med god akustikk og moderne AV-utstyr. Plassert sentralt i administrasjonsfløyen for lett tilgjengelighet.",
+    details: [{label:"Kapasitet",value:"8–10 personer"},{label:"Lys",value:"LED + persienner"},{label:"Etasje",value:"1"},{label:"Booking",value:"Digital skjerm"}],
+    features: ["Konferansebord for 10","Projektor og lerret","Videokonferanseutstyr","Whiteboard","Akustisk behandling","Kaffe-/vannstasjon"],
+    colors: {wall: "#e8e4f0", floor: "#8a7a9a", ceiling: "#f4f2f8", accent: "#6a5a8a"},
+    furniture: "meeting"
+  },
+
+  "hovedsal": {
+    name: "Hovedsal 123", tag: "Sal / Scene", area: "270,9 m²",
+    desc: "Byggets store sal med profesjonell scene og publikumsareal for 188 plasser. Rommet er optimalisert for forestillinger, konserter og større arrangementer med avansert lyd- og lysteknikk.",
+    details: [{label:"Kapasitet",value:"188 sitteplasser"},{label:"Scene",value:"Profesjonell scene"},{label:"Lyd/Lys",value:"Avansert rigg"},{label:"Areal",value:"270,9 m²"}],
+    features: ["188 teater-/konsertplasser","Profesjonell scene med kulisser","Avansert lydanlegg","Scene- og publikumsbelysning","Sceneteppe og flies-rigg","Orkestergrop (opsjon)","Backstage-tilgang"],
+    colors: {wall: "#2a1f3a", floor: "#1a1425", ceiling: "#150e20", accent: "#c8a020"},
+    furniture: "theater"
+  },
+
+  "gang": {
+    name: "Gang / Sone 114", tag: "Sirkulasjon", area: "22,6 m²",
+    desc: "Sentralt knutepunkt mellom administrasjonsfløy, sal og lagring. Ryddige korridorer med god skilting og orienteringspunkter.",
+    details: [{label:"Funksjon",value:"Korridor"},{label:"Lys",value:"LED armaturer"},{label:"Etasje",value:"1"},{label:"Tilgang",value:"Nøkkelkort"}],
+    features: ["Bred korridor (min 1,8 m)","Universell utforming","Skilting og informasjon","Brannslukker og nødlys"],
+    colors: {wall: "#d8dce0", floor: "#909898", ceiling: "#eeeff0", accent: "#5a7a8a"},
+    furniture: "corridor"
+  },
+
+  "lagring": {
+    name: "Lagring", tag: "Lager", area: "ca. 85 m²",
+    desc: "Generelt lager for bygningens driftsmateriell, rekvisitter og utstyr. Organisert med reoler og soner for ulik type materiell.",
+    details: [{label:"Funksjon",value:"Lagring"},{label:"Adkomst",value:"Vareheis nærhet"},{label:"Etasje",value:"1"},{label:"Type",value:"Tørrlager"}],
+    features: ["Faststående reoler","Gulvlaster (400 kg/m²)","Adgangskontroll","God belysning","Klimastyring"],
+    colors: {wall: "#d0ccc4", floor: "#888070", ceiling: "#e8e4dc", accent: "#6a6050"},
+    furniture: "storage"
+  },
+
+  "vornemtak": {
+    name: "Vornemtak 130", tag: "Foaje / Inngang", area: "77,2 m²",
+    desc: "Representativt inngangsparti og publikumsfoaje med høy takhøyde og oversiktlig orientering mot resepsjon og sal.",
+    details: [{label:"Funksjon",value:"Publikumsinngang"},{label:"Lys",value:"Dagslys + LED"},{label:"Areal",value:"77,2 m²"},{label:"H-høyde",value:"4,5 m"}],
+    features: ["Resepsjonsdisk","Informasjonsskjerm","Garderobe-krok","Universell tilgjengelighet","Representativt interiør"],
+    colors: {wall: "#ede8e0", floor: "#c0a870", ceiling: "#f8f5f0", accent: "#8a7040"},
+    furniture: "lobby"
+  },
+
+  "hvac": {
+    name: "HVAC / Teknisk rom", tag: "Teknisk", area: "ca. 60 m²",
+    desc: "Teknisk rom for byggets ventilasjon, varme og kjøling. Inneholder aggregater, pumper og styringssystemer.",
+    details: [{label:"Funksjon",value:"Ventilasjon/Varme"},{label:"Adkomst",value:"Kun driftspersonell"},{label:"Etasje",value:"1"},{label:"Type",value:"Teknisk"}],
+    features: ["Ventilasjonsaggregat","Varmepumpe","BMS-styring","Lydisolert","Servicetilgang"],
+    colors: {wall: "#c0c8c0", floor: "#808888", ceiling: "#d8e0d8", accent: "#406040"},
+    furniture: "technical"
+  },
+
+  "lobby": {
+    name: "Inngang / Atrium", tag: "Inngangsparti", area: "ca. 90 m²",
+    desc: "Sentralt inngangsparti som binder byggets ulike fløyer sammen. Høy takhøyde og dagslys gir en luftig og innbydende atmosfære.",
+    details: [{label:"Funksjon",value:"Sirkulasjon"},{label:"Lys",value:"Glassfasade"},{label:"Etasje",value:"1"},{label:"Tilgang",value:"Publikum/ansatte"}],
+    features: ["Resepsjon / info-punkt","Trapp og heis","Universell utforming","Naturlig lys fra glassvegger"],
+    colors: {wall: "#e8e4dc", floor: "#b0a090", ceiling: "#f5f2ec", accent: "#7a6a50"},
+    furniture: "lobby"
+  },
+
+  "mullrom": {
+    name: "Mullrom 117", tag: "Korridor / Backstage", area: "129,7 m²",
+    desc: "Lang backstage-korridor som forbinder sceneområdet med produksjonsfasiliteter, garderober og lager. Romslig for sceneproduksjon og transport av utstyr.",
+    details: [{label:"Funksjon",value:"Backstage korridor"},{label:"Bredde",value:"min. 3 m"},{label:"Etasje",value:"1"},{label:"Tilgang",value:"Kun personell"}],
+    features: ["Bred transport-korridor","Godsheis-tilgang","Kabelbroer i himling","God belysning","Nøklede soner"],
+    colors: {wall: "#c8c0b8", floor: "#888078", ceiling: "#dcd8d0", accent: "#605850"},
+    furniture: "corridor"
+  },
+
+  "foaje": {
+    name: "Foaje 104", tag: "Publikumsfoaje", area: "101,0 m²",
+    desc: "Stor, lys foaje som fungerer som samlingspunkt for publikum før og etter forestillinger. Tilrettelagt for utstillinger, pauseservering og sosialt samvær.",
+    details: [{label:"Funksjon",value:"Publikumsareal"},{label:"Lys",value:"Glassfasade + LED"},{label:"Areal",value:"101,0 m²"},{label:"Kapasitet",value:"80–100 pers."}],
+    features: ["Bar/pauseservering","Utstillingsmuligheter","Sittegrupper","Glassfasade mot det fri","Fleksibel møblering","Garderobe-tilgang"],
+    colors: {wall: "#ede5d8", floor: "#c0a878", ceiling: "#f8f3ec", accent: "#8a6040"},
+    furniture: "lobby"
+  },
+
+  "matsson": {
+    name: "Matsson 112", tag: "Teknikk", area: "4,6 m²",
+    desc: "Lite teknisk skap-rom for server-/nettverksutstyr tilknyttet salen og administrasjonsfløyen.",
+    details: [{label:"Funksjon",value:"IT/Nettverk"},{label:"Kjøling",value:"Aktiv"},{label:"Etasje",value:"1"},{label:"Adkomst",value:"Kun IT-personell"}],
+    features: ["Serverskap","Patch-paneler","UPS","Klimakontroll"],
+    colors: {wall: "#c0c4c8", floor: "#808490", ceiling: "#d4d8dc", accent: "#405060"},
+    furniture: "technical"
+  },
+
+  "mulitvertaled": {
+    name: "Multihvertaled 125", tag: "Flerbrukssal", area: "45,3 m²",
+    desc: "Fleksibel flerbruksal tilpasset kurs, øvinger, prøver og mindre arrangementer. Kan møbleres på ulike måter etter behov.",
+    details: [{label:"Kapasitet",value:"30–40 pers."},{label:"Lys",value:"LED + dimmer"},{label:"Areal",value:"45,3 m²"},{label:"Gulv",value:"Parkett"}],
+    features: ["Foldbare stoler og bord","Projektor og lerret","Lydanlegg","Speil og dansestang (opsjon)","Blackout gardiner","Direkte tilgang til backstage"],
+    colors: {wall: "#e0dcd4", floor: "#9a8a6a", ceiling: "#f0ede8", accent: "#6a5a40"},
+    furniture: "rehearsal"
+  },
+
+  "bpg": {
+    name: "BPG 164", tag: "Produksjon", area: "46,5 m²",
+    desc: "Produksjonsrom for kulisser, scenografi og rekvisitter. Romslig med høy takhøyde og lette gulvmaterialer for praktisk arbeid.",
+    details: [{label:"Funksjon",value:"Sceneproduksjon"},{label:"Takhøyde",value:"3,5 m"},{label:"Areal",value:"46,5 m²"},{label:"Gulv",value:"Betong"}],
+    features: ["Arbeidsbord og verktøybenk","Malings- og byggmaterialer","Ventilasjon / avtrekk","God belysning","Lagerskap"],
+    colors: {wall: "#d0c8bc", floor: "#888070", ceiling: "#e4dcd4", accent: "#604830"},
+    furniture: "workshop"
+  },
+
+  "restlager": {
+    name: "Rekvisittelager 107", tag: "Lager", area: "37,4 m²",
+    desc: "Dedikert rekvisittlager med systematisk oppbevaring av sceneelementer, rekvisitter og kostymemateriell.",
+    details: [{label:"Funksjon",value:"Rekvisittlagring"},{label:"Hyller",value:"Faststående"},{label:"Areal",value:"37,4 m²"},{label:"Klimakontroll",value:"Ja"}],
+    features: ["Faststående hyllesystem","Hengegarderobe","Merket lagersystem","Klimastyring","Adgangskontroll"],
+    colors: {wall: "#d4ccbc", floor: "#887868", ceiling: "#e8e0d0", accent: "#605040"},
+    furniture: "storage"
+  },
+
+  "gosen": {
+    name: "Gosen Room 115", tag: "Kostymerom", area: "28,3 m²",
+    desc: "Profesjonelt kostymerom med tilpasset belysning, speil og oppbevaringssystem for kostymer og rekvisitter knyttet til forestillingene.",
+    details: [{label:"Funksjon",value:"Kostymer"},{label:"Lys",value:"Teater-belysning"},{label:"Areal",value:"28,3 m²"},{label:"Tilgang",value:"Personell"}],
+    features: ["Garderobeskinner","Store scenebelysningsspeil","Arbeidsbord for sying","Kostymeoppbevaring","Jernhyller for tilbehør"],
+    colors: {wall: "#e8ddd0", floor: "#9a8868", ceiling: "#f4ede4", accent: "#7a5838"},
+    furniture: "dressing"
+  },
+
+  "wc": {
+    name: "WC / Bad", tag: "Sanitær", area: "ca. 36 m²",
+    desc: "Sanitæranlegg med separate toaletter for damer og herrer, samt universelt utformet HC-toalett.",
+    details: [{label:"Funksjon",value:"Sanitær"},{label:"Universell",value:"HC-toalett"},{label:"Etasje",value:"1"},{label:"Antall",value:"6+ enheter"}],
+    features: ["Dametoalett","Herretoalett","HC-tilpasset toalett","Servantsone","Automatisk ventilasjon"],
+    colors: {wall: "#e8f0f4", floor: "#a0b8c0", ceiling: "#f4f8fa", accent: "#4a7888"},
+    furniture: "bathroom"
+  },
+
+  "garderobe": {
+    name: "Garderobe 119", tag: "Garderobe", area: "21,6 m²",
+    desc: "Garderobe for utøvere og ansatte med skap, benker og sanitærfasiliteter i nærhet til sceneområdet.",
+    details: [{label:"Funksjon",value:"Utøvergarderobe"},{label:"Kapasitet",value:"10–15 personer"},{label:"Areal",value:"21,6 m²"},{label:"Tilgang",value:"Personell"}],
+    features: ["Individuelle skap","Benk og kroker","Speil","Nærhet til dusj/WC","Direkte sceneadkomst"],
+    colors: {wall: "#dce4e8", floor: "#9aaab0", ceiling: "#eef2f4", accent: "#4a6a78"},
+    furniture: "dressing"
+  },
+
+  "trening": {
+    name: "Treningsrom 100", tag: "Treningsrom", area: "39,4 m²",
+    desc: "Trenings- og oppvarmingsrom for utøvere og ansatte. Parkett-gulv og veggspeil egner seg for dans, yoga og generell trening.",
+    details: [{label:"Funksjon",value:"Trening/øving"},{label:"Gulv",value:"Parkett / fjæring"},{label:"Areal",value:"39,4 m²"},{label:"Utstyr",value:"Basis treningsutstyr"}],
+    features: ["Speilvegg","Barreskinne","Mykt parkettgulv","Prosjektor (opsjon)","Lydanlegg","Garderobetilgang"],
+    colors: {wall: "#e0e8e4", floor: "#7a9878", ceiling: "#eef4f0", accent: "#4a7858"},
+    furniture: "gym"
+  },
+
+  "geiter": {
+    name: "Geoterober 100", tag: "Lager", area: "76,0 m²",
+    desc: "Stort bakre lager for store sceneelementer, stillas, lys- og lydutstyr samt andre bulkvarer knyttet til produksjon.",
+    details: [{label:"Funksjon",value:"Bulklager"},{label:"Takhøyde",value:"4 m"},{label:"Areal",value:"76,0 m²"},{label:"Adkomst",value:"Varemottak"}],
+    features: ["Høy takhøyde for store elementer","Varemottaksdør","Gaffeltruckadkomst","Faststående reoler","Belysning og strøm"],
+    colors: {wall: "#ccc4b8", floor: "#807868", ceiling: "#e0d8cc", accent: "#584830"},
+    furniture: "storage"
+  },
+
+  "vestarom": {
+    name: "Vestarom", tag: "Pauserom", area: "ca. 60 m²",
+    desc: "Hvilerom og pauserom for ansatte og utøvere, med sofaer, kjøkken og avslappende atmosfære.",
+    details: [{label:"Funksjon",value:"Pauserom"},{label:"Kapasitet",value:"15–20 personer"},{label:"Etasje",value:"1"},{label:"Lys",value:"Naturlig + LED"}],
+    features: ["Sofagruppe","Kjøkkenbenk og kaffe","Spisegjord","Naturlig lys","Bøker og aviser"],
+    colors: {wall: "#e8e0d8", floor: "#b09070", ceiling: "#f4f0ea", accent: "#7a6050"},
+    furniture: "lounge"
+  }
+};
+
+// --- Canvas room renderer ---
+function drawRoom(canvas, roomData) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width = canvas.offsetWidth;
+  const H = canvas.height = canvas.offsetHeight;
+  ctx.clearRect(0, 0, W, H);
+
+  const c = roomData.colors;
+  const type = roomData.furniture;
+
+  // Perspective room: floor, back wall, left wall, right wall, ceiling
+  const vx = W * 0.5, vy = H * 0.38; // vanishing point
+  const fl = 0.08, fr = 0.92, ft = 0.15, fb = 0.95; // floor corners (% of canvas)
+
+  // Background gradient
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, shadeColor(c.ceiling, -5));
+  bg.addColorStop(1, shadeColor(c.ceiling, -20));
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Floor
+  ctx.beginPath();
+  ctx.moveTo(W * fl, H * fb);
+  ctx.lineTo(W * fr, H * fb);
+  ctx.lineTo(vx + (W * fr - vx) * 0.65, vy + (H * fb - vy) * 0.65);
+  ctx.lineTo(vx + (W * fl - vx) * 0.65, vy + (H * fb - vy) * 0.65);
+  ctx.closePath();
+  const floorGrad = ctx.createLinearGradient(W * 0.5, vy, W * 0.5, H * fb);
+  floorGrad.addColorStop(0, shadeColor(c.floor, 10));
+  floorGrad.addColorStop(1, shadeColor(c.floor, -15));
+  ctx.fillStyle = floorGrad;
+  ctx.fill();
+
+  // Back wall
+  const bwl = vx + (W * fl - vx) * 0.65;
+  const bwr = vx + (W * fr - vx) * 0.65;
+  const bwb = vy + (H * fb - vy) * 0.65;
+  const bwt = vy + (H * ft - vy) * 0.65;
+  ctx.beginPath();
+  ctx.moveTo(bwl, bwb);
+  ctx.lineTo(bwr, bwb);
+  ctx.lineTo(bwr, bwt);
+  ctx.lineTo(bwl, bwt);
+  ctx.closePath();
+  const wallGrad = ctx.createLinearGradient(0, bwt, 0, bwb);
+  wallGrad.addColorStop(0, shadeColor(c.wall, 5));
+  wallGrad.addColorStop(1, shadeColor(c.wall, -10));
+  ctx.fillStyle = wallGrad;
+  ctx.fill();
+
+  // Left wall
+  ctx.beginPath();
+  ctx.moveTo(W * fl, H * fb);
+  ctx.lineTo(bwl, bwb);
+  ctx.lineTo(bwl, bwt);
+  ctx.lineTo(W * fl, H * ft);
+  ctx.closePath();
+  const lwGrad = ctx.createLinearGradient(W * fl, 0, bwl, 0);
+  lwGrad.addColorStop(0, shadeColor(c.wall, -20));
+  lwGrad.addColorStop(1, shadeColor(c.wall, -5));
+  ctx.fillStyle = lwGrad;
+  ctx.fill();
+
+  // Right wall
+  ctx.beginPath();
+  ctx.moveTo(W * fr, H * fb);
+  ctx.lineTo(bwr, bwb);
+  ctx.lineTo(bwr, bwt);
+  ctx.lineTo(W * fr, H * ft);
+  ctx.closePath();
+  const rwGrad = ctx.createLinearGradient(bwr, 0, W * fr, 0);
+  rwGrad.addColorStop(0, shadeColor(c.wall, -5));
+  rwGrad.addColorStop(1, shadeColor(c.wall, -25));
+  ctx.fillStyle = rwGrad;
+  ctx.fill();
+
+  // Ceiling
+  ctx.beginPath();
+  ctx.moveTo(W * fl, H * ft);
+  ctx.lineTo(W * fr, H * ft);
+  ctx.lineTo(bwr, bwt);
+  ctx.lineTo(bwl, bwt);
+  ctx.closePath();
+  const ceilGrad = ctx.createLinearGradient(0, H * ft, 0, bwt);
+  ceilGrad.addColorStop(0, shadeColor(c.ceiling, 5));
+  ceilGrad.addColorStop(1, shadeColor(c.ceiling, -8));
+  ctx.fillStyle = ceilGrad;
+  ctx.fill();
+
+  // Floor lines (perspective)
+  ctx.strokeStyle = 'rgba(0,0,0,0.07)';
+  ctx.lineWidth = 0.5;
+  for (let i = 1; i < 5; i++) {
+    const t = i / 5;
+    const x = lerp(W * fl, W * fr, t);
+    ctx.beginPath();
+    ctx.moveTo(x, H * fb);
+    ctx.lineTo(lerp(x, vx, 0.65), lerp(H * fb, vy, 0.65));
+    ctx.stroke();
+  }
+
+  // Draw furniture based on type
+  drawFurniture(ctx, type, W, H, vx, vy, fl, fr, ft, fb, bwl, bwr, bwb, bwt, c);
+
+  // Light spots on ceiling
+  ctx.fillStyle = 'rgba(255,255,200,0.15)';
+  const lights = type === 'theater' ? 6 : 3;
+  for (let i = 0; i < lights; i++) {
+    const lx = lerp(bwl + 30, bwr - 30, (i + 0.5) / lights);
+    const ly = lerp(bwt + 5, bwt + 20, 0.5);
+    ctx.beginPath();
+    ctx.arc(lx, ly, 8, 0, Math.PI * 2);
+    ctx.fill();
+    // Cone of light
+    ctx.beginPath();
+    ctx.moveTo(lx - 4, ly + 4);
+    ctx.lineTo(lx + 4, ly + 4);
+    const cx = lerp(lx, W * 0.5, 0.1);
+    const floorY = lerp(H * fb, vy, 0.35);
+    ctx.lineTo(cx + 30, floorY);
+    ctx.lineTo(cx - 30, floorY);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,200,0.04)';
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,200,0.15)';
+  }
+
+  // Ambient occlusion edges
+  ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+  ctx.lineWidth = 1;
+  // floor/wall junction
+  ctx.beginPath(); ctx.moveTo(W*fl, H*fb); ctx.lineTo(bwl, bwb); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W*fr, H*fb); ctx.lineTo(bwr, bwb); ctx.stroke();
+  // wall/ceil junction
+  ctx.beginPath(); ctx.moveTo(W*fl, H*ft); ctx.lineTo(bwl, bwt); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W*fr, H*ft); ctx.lineTo(bwr, bwt); ctx.stroke();
+}
+
+function drawFurniture(ctx, type, W, H, vx, vy, fl, fr, ft, fb, bwl, bwr, bwb, bwt, c) {
+  // Project a point from floor coordinates (0-1, 0-1) to screen
+  function floorPt(u, v) {
+    const fx = lerp(W * fl, W * fr, u);
+    const fy = H * fb;
+    const bx = lerp(bwl, bwr, u);
+    const by = bwb;
+    return { x: lerp(fx, bx, v), y: lerp(fy, by, v) };
+  }
+
+  function wallPt(u, h) {
+    const bx = lerp(bwl, bwr, u);
+    const bot = bwb, top = bwt;
+    return { x: bx, y: lerp(bot, top, h) };
+  }
+
+  if (type === 'office') {
+    // Desk
+    drawBox3D(ctx, floorPt(0.25, 0.5), floorPt(0.55, 0.5), floorPt(0.55, 0.62), floorPt(0.25, 0.62),
+      W, H, vx, vy, fl, fr, ft, fb, bwl, bwr, bwb, bwt, shadeColor(c.accent, 20), 0.12);
+    // Chair
+    drawCircle3D(ctx, floorPt(0.40, 0.45), 14, c.accent);
+    // Window on back wall
+    drawWindow(ctx, wallPt(0.35, 0.3), wallPt(0.65, 0.75), c.wall);
+    // Bookshelf on left side
+    const s1 = floorPt(0.05, 0.55); const s2 = floorPt(0.18, 0.55);
+    const s3 = floorPt(0.18, 0.9); const s4 = floorPt(0.05, 0.9);
+    ctx.fillStyle = shadeColor(c.accent, -20);
+    drawQuad(ctx, s1, s2, s3, s4);
+  }
+
+  else if (type === 'openoffice') {
+    // Multiple desks
+    const deskCols = 3, deskRows = 2;
+    for (let r = 0; r < deskRows; r++) {
+      for (let col = 0; col < deskCols; col++) {
+        const u = 0.15 + col * 0.25;
+        const v = 0.35 + r * 0.3;
+        drawBox3D(ctx, floorPt(u, v), floorPt(u+0.18, v), floorPt(u+0.18, v+0.12), floorPt(u, v+0.12),
+          W, H, vx, vy, fl, fr, ft, fb, bwl, bwr, bwb, bwt, shadeColor(c.accent, 15), 0.08);
+        drawCircle3D(ctx, floorPt(u + 0.09, v - 0.04), 8, c.accent);
+      }
+    }
+    drawWindow(ctx, wallPt(0.2, 0.2), wallPt(0.8, 0.75), c.wall);
+  }
+
+  else if (type === 'meeting') {
+    // Conference table (oval-ish)
+    const t1 = floorPt(0.25, 0.4); const t2 = floorPt(0.75, 0.4);
+    const t3 = floorPt(0.75, 0.7); const t4 = floorPt(0.25, 0.7);
+    ctx.fillStyle = shadeColor(c.accent, 10);
+    drawQuad(ctx, t1, t2, t3, t4);
+    ctx.strokeStyle = shadeColor(c.accent, -10); ctx.lineWidth = 1;
+    drawQuadStroke(ctx, t1, t2, t3, t4);
+    // Chairs around
+    for (let i = 0; i < 5; i++) {
+      const u = 0.3 + i * 0.1;
+      drawCircle3D(ctx, floorPt(u, 0.28), 9, c.accent);
+      drawCircle3D(ctx, floorPt(u, 0.78), 9, c.accent);
+    }
+    // Projector screen on back wall
+    ctx.fillStyle = 'rgba(240,240,255,0.7)';
+    const ps1 = wallPt(0.2, 0.25); const ps2 = wallPt(0.8, 0.25);
+    const ps3 = wallPt(0.8, 0.75); const ps4 = wallPt(0.2, 0.75);
+    drawQuad(ctx, ps1, ps2, ps3, ps4);
+  }
+
+  else if (type === 'theater') {
+    // Rows of seats
+    for (let row = 0; row < 5; row++) {
+      const v = 0.2 + row * 0.14;
+      const seats = 8 - row;
+      for (let s = 0; s < seats; s++) {
+        const u = (1 - seats * 0.1) / 2 + s * 0.1;
+        const p = floorPt(u + 0.05, v);
+        ctx.fillStyle = row % 2 === 0 ? '#8a2020' : '#6a1818';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    // Stage
+    const stg1 = floorPt(0.1, 0.78); const stg2 = floorPt(0.9, 0.78);
+    const stg3 = floorPt(0.9, 0.97); const stg4 = floorPt(0.1, 0.97);
+    ctx.fillStyle = '#3a2000';
+    drawQuad(ctx, stg1, stg2, stg3, stg4);
+    // Stage lights on back wall
+    for (let i = 0; i < 5; i++) {
+      const wp = wallPt(0.15 + i * 0.175, 0.85);
+      ctx.fillStyle = '#c8a020';
+      ctx.beginPath(); ctx.arc(wp.x, wp.y, 5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(200,160,32,0.1)';
+    const stgCenter = floorPt(0.5, 0.88);
+    ctx.beginPath();
+    ctx.arc(stgCenter.x, stgCenter.y, 40, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  else if (type === 'lobby') {
+    // Sofa groups
+    const s1=floorPt(0.1,0.5); const s2=floorPt(0.35,0.5); const s3=floorPt(0.35,0.65); const s4=floorPt(0.1,0.65);
+    ctx.fillStyle = shadeColor(c.accent, 0);
+    drawQuad(ctx, s1, s2, s3, s4);
+    // Coffee table
+    drawBox3D(ctx, floorPt(0.4,0.45), floorPt(0.6,0.45), floorPt(0.6,0.6), floorPt(0.4,0.6),
+      W,H,vx,vy,fl,fr,ft,fb,bwl,bwr,bwb,bwt, shadeColor(c.accent,-10), 0.06);
+    // Reception desk
+    const r1=floorPt(0.6,0.35); const r2=floorPt(0.9,0.35); const r3=floorPt(0.9,0.55); const r4=floorPt(0.6,0.55);
+    ctx.fillStyle = shadeColor(c.accent, 5);
+    drawQuad(ctx, r1, r2, r3, r4);
+    // Tall windows
+    drawWindow(ctx, wallPt(0.1, 0.1), wallPt(0.4, 0.8), c.wall);
+    drawWindow(ctx, wallPt(0.5, 0.1), wallPt(0.8, 0.8), c.wall);
+  }
+
+  else if (type === 'storage') {
+    // Shelving units
+    for (let col = 0; col < 4; col++) {
+      const u = 0.08 + col * 0.23;
+      const sh1=floorPt(u,0.35), sh2=floorPt(u+0.15,0.35), sh3=floorPt(u+0.15,0.95), sh4=floorPt(u,0.95);
+      ctx.fillStyle = shadeColor(c.accent, col % 2 === 0 ? -15 : -25);
+      drawQuad(ctx, sh1, sh2, sh3, sh4);
+      for (let s = 0; s < 4; s++) {
+        const sv = 0.4 + s * 0.14;
+        const sw1=floorPt(u, sv), sw2=floorPt(u+0.15, sv);
+        ctx.strokeStyle = shadeColor(c.accent, -40);
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(sw1.x, sw1.y); ctx.lineTo(sw2.x, sw2.y); ctx.stroke();
+      }
+    }
+  }
+
+  else if (type === 'corridor') {
+    // Long corridor - just floor lines and door
+    drawWindow(ctx, wallPt(0.3, 0.1), wallPt(0.7, 0.9), c.wall);
+    // Door frame
+    ctx.strokeStyle = shadeColor(c.wall, -30);
+    ctx.lineWidth = 3;
+    const d1 = wallPt(0.4, 0.1); const d2 = wallPt(0.6, 0.1);
+    const d3 = wallPt(0.6, 0.85); const d4 = wallPt(0.4, 0.85);
+    ctx.beginPath(); ctx.moveTo(d4.x, d4.y); ctx.lineTo(d1.x, d1.y); ctx.lineTo(d2.x, d2.y); ctx.lineTo(d3.x, d3.y); ctx.stroke();
+  }
+
+  else if (type === 'technical') {
+    // Server racks / equipment
+    for (let i = 0; i < 3; i++) {
+      const u = 0.15 + i * 0.25;
+      const e1=floorPt(u,0.4), e2=floorPt(u+0.15,0.4), e3=floorPt(u+0.15,0.85), e4=floorPt(u,0.85);
+      ctx.fillStyle = i % 2 === 0 ? '#303840' : '#282e34';
+      drawQuad(ctx, e1, e2, e3, e4);
+      // Blinking lights
+      for (let l = 0; l < 5; l++) {
+        const lp = floorPt(u + 0.04 + (l % 3) * 0.03, 0.42 + l * 0.08);
+        ctx.fillStyle = l % 2 === 0 ? '#00ff80' : '#ff8000';
+        ctx.beginPath(); ctx.arc(lp.x, lp.y, 2, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+
+  else if (type === 'dressing') {
+    // Mirror wall
+    ctx.fillStyle = 'rgba(200,220,240,0.3)';
+    drawQuad(ctx, wallPt(0.05, 0.05), wallPt(0.95, 0.05), wallPt(0.95, 0.9), wallPt(0.05, 0.9));
+    ctx.strokeStyle = 'rgba(180,200,220,0.5)'; ctx.lineWidth = 2;
+    drawQuadStroke(ctx, wallPt(0.05, 0.05), wallPt(0.95, 0.05), wallPt(0.95, 0.9), wallPt(0.05, 0.9));
+    // Dressing table
+    drawBox3D(ctx, floorPt(0.1,0.55), floorPt(0.9,0.55), floorPt(0.9,0.7), floorPt(0.1,0.7),
+      W,H,vx,vy,fl,fr,ft,fb,bwl,bwr,bwb,bwt, shadeColor(c.accent,5), 0.1);
+    // Clothes rail
+    ctx.strokeStyle = '#888'; ctx.lineWidth = 3;
+    const cr1 = floorPt(0.1, 0.3); const cr2 = floorPt(0.9, 0.3);
+    ctx.beginPath(); ctx.moveTo(cr1.x, cr1.y - 30); ctx.lineTo(cr2.x, cr2.y - 30); ctx.stroke();
+  }
+
+  else if (type === 'rehearsal') {
+    // Dance floor / rehearsal room
+    // Mirrors on back wall
+    ctx.fillStyle = 'rgba(200,220,240,0.25)';
+    drawQuad(ctx, wallPt(0.05, 0.05), wallPt(0.95, 0.05), wallPt(0.95, 0.92), wallPt(0.05, 0.92));
+    // Barre
+    ctx.strokeStyle = '#8a6040'; ctx.lineWidth = 4;
+    const b1 = floorPt(0.05, 0.35); const b2 = floorPt(0.95, 0.35);
+    ctx.beginPath(); ctx.moveTo(b1.x, b1.y - 25); ctx.lineTo(b2.x, b2.y - 25); ctx.stroke();
+    // Stacked chairs on side
+    for (let i = 0; i < 4; i++) {
+      const cp = floorPt(0.05, 0.75 + i * 0.05);
+      ctx.fillStyle = shadeColor(c.accent, -10 + i * 5);
+      ctx.beginPath(); ctx.arc(cp.x, cp.y, 8, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  else if (type === 'workshop') {
+    // Work benches
+    for (let i = 0; i < 2; i++) {
+      const u = 0.08 + i * 0.48;
+      drawBox3D(ctx, floorPt(u,0.4), floorPt(u+0.38,0.4), floorPt(u+0.38,0.58), floorPt(u,0.58),
+        W,H,vx,vy,fl,fr,ft,fb,bwl,bwr,bwb,bwt, shadeColor(c.accent,-10), 0.1);
+    }
+    // Tool wall
+    ctx.fillStyle = shadeColor(c.wall, -15);
+    drawQuad(ctx, wallPt(0.05, 0.05), wallPt(0.95, 0.05), wallPt(0.95, 0.85), wallPt(0.05, 0.85));
+    for (let t = 0; t < 8; t++) {
+      const tp = wallPt(0.1 + t * 0.1, 0.4);
+      ctx.fillStyle = '#808080';
+      ctx.beginPath(); ctx.arc(tp.x, tp.y, 4, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  else if (type === 'gym') {
+    // Mirror wall
+    ctx.fillStyle = 'rgba(200,220,240,0.25)';
+    drawQuad(ctx, wallPt(0.05, 0.05), wallPt(0.95, 0.05), wallPt(0.95, 0.92), wallPt(0.05, 0.92));
+    // Exercise mats on floor
+    for (let i = 0; i < 3; i++) {
+      const u = 0.08 + i * 0.3;
+      const m1=floorPt(u,0.45), m2=floorPt(u+0.22,0.45), m3=floorPt(u+0.22,0.82), m4=floorPt(u,0.82);
+      ctx.fillStyle = i % 2 === 0 ? '#4a7858' : '#3a6048';
+      drawQuad(ctx, m1, m2, m3, m4);
+    }
+  }
+
+  else if (type === 'bathroom') {
+    // Tiles on wall
+    ctx.fillStyle = '#e0eef4';
+    drawQuad(ctx, wallPt(0.0, 0.0), wallPt(1.0, 0.0), wallPt(1.0, 1.0), wallPt(0.0, 1.0));
+    // Tile grid lines
+    ctx.strokeStyle = 'rgba(150,180,200,0.4)'; ctx.lineWidth = 0.5;
+    for (let i = 1; i < 8; i++) {
+      const t = i / 8;
+      const w1 = wallPt(t, 0); const w2 = wallPt(t, 1);
+      ctx.beginPath(); ctx.moveTo(w1.x, w1.y); ctx.lineTo(w2.x, w2.y); ctx.stroke();
+    }
+    // Sink
+    drawBox3D(ctx, floorPt(0.15,0.35), floorPt(0.4,0.35), floorPt(0.4,0.52), floorPt(0.15,0.52),
+      W,H,vx,vy,fl,fr,ft,fb,bwl,bwr,bwb,bwt, '#c8dde4', 0.08);
+    // Toilet
+    drawBox3D(ctx, floorPt(0.6,0.35), floorPt(0.82,0.35), floorPt(0.82,0.58), floorPt(0.6,0.58),
+      W,H,vx,vy,fl,fr,ft,fb,bwl,bwr,bwb,bwt, '#d8e8ec', 0.1);
+  }
+
+  else if (type === 'lounge') {
+    // Sofa L-shape
+    const s1=floorPt(0.05,0.4), s2=floorPt(0.55,0.4), s3=floorPt(0.55,0.6), s4=floorPt(0.05,0.6);
+    ctx.fillStyle = shadeColor(c.accent, 5);
+    drawQuad(ctx, s1, s2, s3, s4);
+    // Coffee table
+    drawBox3D(ctx, floorPt(0.2,0.65), floorPt(0.5,0.65), floorPt(0.5,0.78), floorPt(0.2,0.78),
+      W,H,vx,vy,fl,fr,ft,fb,bwl,bwr,bwb,bwt, shadeColor(c.accent,-10), 0.05);
+    // Kitchen counter on right
+    drawBox3D(ctx, floorPt(0.65,0.35), floorPt(0.95,0.35), floorPt(0.95,0.6), floorPt(0.65,0.6),
+      W,H,vx,vy,fl,fr,ft,fb,bwl,bwr,bwb,bwt, shadeColor(c.accent,-5), 0.12);
+    drawWindow(ctx, wallPt(0.2, 0.1), wallPt(0.6, 0.7), c.wall);
+  }
+
+  else {
+    // Generic: just window
+    drawWindow(ctx, wallPt(0.25, 0.2), wallPt(0.75, 0.75), c.wall);
+  }
+}
+
+function drawBox3D(ctx, p1, p2, p3, p4, W, H, vx, vy, fl, fr, ft, fb, bwl, bwr, bwb, bwt, color, h) {
+  // Top face of a box (slightly above floor)
+  const liftY = H * h;
+  const top1 = {x: p1.x, y: p1.y - liftY};
+  const top2 = {x: p2.x, y: p2.y - liftY};
+  const top3 = {x: p3.x, y: p3.y - liftY};
+  const top4 = {x: p4.x, y: p4.y - liftY};
+  // Front face
+  ctx.fillStyle = shadeColor(color, -10);
+  drawQuad(ctx, p3, p4, top4, top3);
+  // Side face
+  ctx.fillStyle = shadeColor(color, -20);
+  drawQuad(ctx, p1, p4, top4, top1);
+  // Top face
+  ctx.fillStyle = shadeColor(color, 5);
+  drawQuad(ctx, top1, top2, top3, top4);
+}
+
+function drawCircle3D(ctx, p, r, color) {
+  ctx.fillStyle = shadeColor(color, -5);
+  ctx.beginPath();
+  ctx.ellipse(p.x, p.y, r, r * 0.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawWindow(ctx, p1, p2, wallColor) {
+  // p1 = top-left, p2 = bottom-right on back wall
+  // Sky gradient
+  const sg = ctx.createLinearGradient(p1.x, p1.y, p2.x, p2.y);
+  sg.addColorStop(0, '#b0d4f0');
+  sg.addColorStop(1, '#e8f4f8');
+  ctx.fillStyle = sg;
+  ctx.fillRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+  // Window frame
+  ctx.strokeStyle = shadeColor(wallColor, -25);
+  ctx.lineWidth = 2;
+  ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+  // Cross bar
+  const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+  ctx.beginPath(); ctx.moveTo(mx, p1.y); ctx.lineTo(mx, p2.y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(p1.x, my); ctx.lineTo(p2.x, my); ctx.stroke();
+}
+
+function drawQuad(ctx, p1, p2, p3, p4) {
+  ctx.beginPath();
+  ctx.moveTo(p1.x, p1.y);
+  ctx.lineTo(p2.x, p2.y);
+  ctx.lineTo(p3.x, p3.y);
+  ctx.lineTo(p4.x, p4.y);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawQuadStroke(ctx, p1, p2, p3, p4) {
+  ctx.beginPath();
+  ctx.moveTo(p1.x, p1.y);
+  ctx.lineTo(p2.x, p2.y);
+  ctx.lineTo(p3.x, p3.y);
+  ctx.lineTo(p4.x, p4.y);
+  ctx.closePath();
+  ctx.stroke();
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function shadeColor(hex, pct) {
+  let r = parseInt(hex.slice(1,3), 16);
+  let g = parseInt(hex.slice(3,5), 16);
+  let b = parseInt(hex.slice(5,7), 16);
+  r = Math.min(255, Math.max(0, r + pct * 2));
+  g = Math.min(255, Math.max(0, g + pct * 2));
+  b = Math.min(255, Math.max(0, b + pct * 2));
+  return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
+}
+
+// --- UI Logic ---
+const panel = document.getElementById('panel');
+const canvas = document.getElementById('room-canvas');
+let activeArea = null;
+
+document.querySelectorAll('.room-area').forEach(area => {
+  area.addEventListener('click', function (e) {
+    const id = this.dataset.room;
+    const room = rooms[id];
+    if (!room) return;
+
+    // Deactivate previous
+    if (activeArea) activeArea.classList.remove('active');
+    this.classList.add('active');
+    activeArea = this;
+
+    // Fill panel
+    document.getElementById('panel-tag').textContent = room.tag;
+    document.getElementById('panel-name').textContent = room.name;
+    document.getElementById('panel-area').textContent = room.area;
+    document.getElementById('panel-desc').textContent = room.desc;
+
+    const grid = document.getElementById('detail-grid');
+    grid.innerHTML = room.details.map(d =>
+      `<div class="detail-card"><div class="label">${d.label}</div><div class="value">${d.value}</div></div>`
+    ).join('');
+
+    document.getElementById('features-list').innerHTML = room.features.map(f =>
+      `<div class="feature-item"><span class="feature-dot"></span>${f}</div>`
+    ).join('');
+
+    panel.classList.add('open');
+    document.getElementById('hint').classList.add('hidden');
+
+    // Render room after panel opens (wait for layout)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => drawRoom(canvas, room));
+    });
+  });
+
+  area.addEventListener('mouseenter', function () {
+    const id = this.dataset.room;
+    const room = rooms[id];
+    if (room) {
+      document.getElementById('hint').textContent = `${room.name} — ${room.area}`;
+      document.getElementById('hint').classList.remove('hidden');
+    }
+  });
+
+  area.addEventListener('mouseleave', function () {
+    if (!panel.classList.contains('open')) {
+      document.getElementById('hint').textContent = 'Pek på et rom for å utforske';
+    } else {
+      document.getElementById('hint').classList.add('hidden');
+    }
+  });
+});
+
+document.getElementById('panel-close').addEventListener('click', () => {
+  panel.classList.remove('open');
+  if (activeArea) { activeArea.classList.remove('active'); activeArea = null; }
+  document.getElementById('hint').textContent = 'Pek på et rom for å utforske';
+  document.getElementById('hint').classList.remove('hidden');
+});
+
+// Rerender on resize
+window.addEventListener('resize', () => {
+  if (panel.classList.contains('open') && activeArea) {
+    const id = activeArea.dataset.room;
+    const room = rooms[id];
+    if (room) drawRoom(canvas, room);
+  }
+});
+</script>
+</body>
+</html>
