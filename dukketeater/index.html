@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dukketeater VR</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 18px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; background: #15171c; color: #e8e8ea; }
+  main { max-width: 820px; margin: 0 auto; padding: 24px 18px 60px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  .sub { color: #9aa0ab; margin: 0 0 20px; }
+  section { background: #1e2129; border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
+  h2 { font-size: 17px; margin: 0 0 10px; color: #b9c2d6; font-weight: 600; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  button { font: inherit; background: #2f6fed; color: #fff; border: 0; border-radius: 10px; padding: 12px 18px; cursor: pointer; }
+  button.sec { background: #343947; }
+  button:disabled { opacity: .4; cursor: default; }
+  .field { display: grid; grid-template-columns: 170px 1fr; gap: 10px; align-items: center; margin: 8px 0; }
+  select { font: inherit; background: #2a2e38; color: #e8e8ea; border: 1px solid #3a4050; border-radius: 8px; padding: 6px 8px; }
+  label.chk { display: flex; gap: 10px; align-items: center; margin: 8px 0; }
+  input[type=checkbox] { width: 22px; height: 22px; }
+  #status { color: #f3c969; min-height: 1.4em; margin: 6px 0 0; }
+  .hint { color: #9aa0ab; font-size: 15px; }
+  ul { margin: 6px 0 0; padding-left: 22px; }
+  li { margin: 3px 0; }
+  kbd { background: #343947; border-radius: 5px; padding: 1px 6px; font-size: 14px; }
+  #screen canvas { display: block; width: 100% !important; height: auto !important; border-radius: 10px; background: #000; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<main>
+  <h1>Dukketeater VR</h1>
+  <p class="sub">Hver hånd styrer en hånddukke på en liten teaterscene. Ta opp forestillingen og lag video av den.</p>
+
+  <section>
+    <h2>1 · Dukker og scene</h2>
+    <div class="field"><span>Venstre hånd</span><select id="ch0"></select></div>
+    <div class="field"><span>Høyre hånd</span><select id="ch1"></select></div>
+    <div class="field"><span>Bakteppe</span>
+      <select id="backdrop"><option value="eng">Eng</option><option value="natt">Natt</option><option value="floyel">Rød fløyel</option></select></div>
+  </section>
+
+  <section>
+    <h2>2 · Opptak</h2>
+    <div class="row"><button id="mic" class="sec">Slå på mikrofon</button><span id="micInfo" class="hint">Uten mikrofon tas bare bevegelsene opp.</span></div>
+    <label class="chk"><input type="checkbox" id="auto"> Start opptak automatisk når VR starter (trengs med håndsporing, som ikke har knapper)</label>
+  </section>
+
+  <section>
+    <h2>3 · Start</h2>
+    <div class="row">
+      <button id="vr" disabled>Start i VR</button>
+      <button id="ar" disabled>Start med passthrough</button>
+    </div>
+    <p id="status"></p>
+    <ul class="hint">
+      <li>Scenen settes opp foran deg. Rett fram, bak sceneåpningen, henger et stort «speil» som viser det publikum ser.</li>
+      <li><b>Med kontrollere:</b> <kbd>avtrekker</kbd> åpner munnen, <kbd>grep</kbd> lukker øynene, <kbd>spak</kbd> flytter blikket, <kbd>A</kbd>/<kbd>X</kbd> bytter dukke på den hånden.</li>
+      <li><kbd>B</kbd> (høyre) starter og stopper opptak. <kbd>Y</kbd> (venstre) spiller av. <kbd>Venstre spakklikk</kbd> flytter scenen foran deg. <kbd>Høyre spakklikk</kbd> slår speilet av og på.</li>
+      <li><b>Med håndsporing:</b> legg fra deg kontrollerne. Fingrene er overkjeven og tommelen underkjeven, som i en sokkedukke.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>4 · Forestilling</h2>
+    <div id="screen"></div>
+    <p id="takeInfo" class="hint"></p>
+    <div class="row">
+      <button id="play" disabled>Spill av</button>
+      <button id="video" disabled>Lag video</button>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import * as THREE from 'three';
+
+const $ = id => document.getElementById(id);
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+const settings = Object.assign({ chars: [0, 1], backdrop: 'eng', auto: false, monitor: true }, LS.get('dt_settings', {}));
+const saveSettings = () => LS.set('dt_settings', settings);
+function setStatus(t) { $('status').textContent = t || ''; }
+
+// ---------- lagring av opptak (IndexedDB) ----------
+function idb() { return new Promise((res, rej) => { const r = indexedDB.open('dukketeater', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function dbSet(k, v) { const d = await idb(); return new Promise((res, rej) => { const t = d.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); }
+async function dbGet(k) { const d = await idb(); return new Promise((res, rej) => { const r = d.transaction('kv').objectStore('kv').get(k); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+
+// ---------- renderer og scene ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(1);
+renderer.setSize(1280, 720, false);
+renderer.xr.enabled = true;
+renderer.xr.setReferenceSpaceType('local-floor');
+$('screen').appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const BG_AUD = new THREE.Color(0x0c0c12);
+let bgXR = new THREE.Color(0x1b1d24);
+const camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.01, 50);
+scene.add(camera);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x554433, 1.3));
+const sun = new THREE.DirectionalLight(0xfff2dd, 1.6); scene.add(sun);
+
+// Scenen: brukeren står i origo og ser mot -z. Publikum sitter på -z-siden. y = 0 er spillekanten.
+const stage = new THREE.Group(); scene.add(stage);
+sun.position.set(0.5, 1.5, -2); stage.add(sun); stage.add(sun.target); sun.target.position.set(0, 0.2, -0.4);
+const std = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 });
+const box = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); stage.add(m); return m; };
+const wall = std(0x6d1f2c), wood = std(0x9a6a3a), drape = std(0xa3162a), gold = std(0xd9a441);
+box(1.5, 1.2, 0.04, wall, 0, -0.6, -0.55);
+box(1.1, 0.03, 0.1, wood, 0, 0, -0.55);
+box(0.25, 0.55, 0.04, wall, -0.625, 0.275, -0.55);
+box(0.25, 0.55, 0.04, wall, 0.625, 0.275, -0.55);
+box(1.5, 0.25, 0.04, wall, 0, 0.675, -0.55);
+box(0.14, 0.55, 0.03, drape, -0.47, 0.275, -0.58);
+box(0.14, 0.55, 0.03, drape, 0.47, 0.275, -0.58);
+box(1.0, 0.08, 0.03, gold, 0, 0.52, -0.58);
+
+// bakteppe: synlig bare fra publikumssiden, så du ser gjennom det bakfra
+const bdCanvas = document.createElement('canvas'); bdCanvas.width = 1024; bdCanvas.height = 704;
+const bdTex = new THREE.CanvasTexture(bdCanvas); bdTex.colorSpace = THREE.SRGBColorSpace;
+const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.1), new THREE.MeshBasicMaterial({ map: bdTex }));
+backdrop.position.set(0, 0.3, -0.12); backdrop.rotation.y = Math.PI; stage.add(backdrop);
+function drawBackdrop() {
+  const c = bdCanvas.getContext('2d'), W = 1024, H = 704;
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  if (settings.backdrop === 'floyel') {
+    for (let x = 0; x < W; x += 64) { const g = c.createLinearGradient(x, 0, x + 64, 0); g.addColorStop(0, '#5a0d18'); g.addColorStop(0.5, '#a3162a'); g.addColorStop(1, '#5a0d18'); c.fillStyle = g; c.fillRect(x, 0, 64, H); }
+  } else {
+    const night = settings.backdrop === 'natt';
+    const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, night ? '#0b1030' : '#7ec8f2'); g.addColorStop(1, night ? '#27306a' : '#e6f6ff'); c.fillStyle = g; c.fillRect(0, 0, W, H);
+    if (night) { c.fillStyle = '#fff'; for (let i = 0; i < 120; i++) { c.globalAlpha = 0.4 + rnd() * 0.6; c.beginPath(); c.arc(rnd() * W, rnd() * H * 0.7, 1 + rnd() * 2, 0, 7); c.fill(); } c.globalAlpha = 1; }
+    c.fillStyle = night ? '#f4f1d0' : '#ffd84a'; c.beginPath(); c.arc(790, 150, 60, 0, 7); c.fill();
+    c.fillStyle = night ? '#16233f' : '#6dbb5a'; c.beginPath(); c.ellipse(260, 720, 520, 260, 0, 0, 7); c.fill();
+    c.fillStyle = night ? '#101a30' : '#4da447'; c.beginPath(); c.ellipse(800, 760, 560, 250, 0, 0, 7); c.fill();
+    if (!night) for (let i = 0; i < 40; i++) { c.fillStyle = ['#fff', '#ffd84a', '#ff7fa8'][i % 3]; c.beginPath(); c.arc(rnd() * W, 560 + rnd() * 130, 5, 0, 7); c.fill(); }
+  }
+  bdTex.needsUpdate = true;
+}
+drawBackdrop();
+
+// publikumskamera og «speil»
+const audCam = new THREE.PerspectiveCamera(28, 16 / 9, 0.05, 20);
+audCam.position.set(0, 0.28, -2.0); audCam.rotation.y = Math.PI; stage.add(audCam);
+const rt = new THREE.WebGLRenderTarget(960, 540);
+const monitor = new THREE.Mesh(new THREE.PlaneGeometry(1.28, 0.72), new THREE.MeshBasicMaterial({ map: rt.texture, side: THREE.DoubleSide }));
+monitor.position.set(0, 0.3, -1.7); monitor.scale.x = -1; stage.add(monitor);
+const boardCanvas = document.createElement('canvas'); boardCanvas.width = 1024; boardCanvas.height = 400;
+const boardTex = new THREE.CanvasTexture(boardCanvas); boardTex.colorSpace = THREE.SRGBColorSpace;
+const board = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.39), new THREE.MeshBasicMaterial({ map: boardTex, transparent: true }));
+board.position.set(0, -0.32, -1.7); stage.add(board);
+let boardKey = '';
+function setBoard(title, color, rows) {
+  const key = title + color + rows.join('|'); if (key === boardKey) return; boardKey = key;
+  const c = boardCanvas.getContext('2d'); c.clearRect(0, 0, 1024, 400);
+  c.fillStyle = 'rgba(18,20,28,0.9)'; c.beginPath(); c.roundRect(4, 4, 1016, 392, 30); c.fill();
+  c.fillStyle = color; c.font = 'bold 58px system-ui, sans-serif'; c.fillText(title, 40, 84);
+  c.fillStyle = '#fff'; c.font = '36px system-ui, sans-serif';
+  rows.forEach((l, i) => c.fillText(l, 40, 156 + i * 56));
+  boardTex.needsUpdate = true;
+}
+
+// ---------- dukker ----------
+const CHARS = [
+  { name: 'Grønn frosk', skin: 0x4caf50, extra: 'frog' },
+  { name: 'Lilla monster', skin: 0x8e5bd6, extra: 'horns' },
+  { name: 'Oransje rev', skin: 0xf08a2c, extra: 'ears' },
+  { name: 'Blå fugl', skin: 0x3d8fe0, jaw: 0xf7c531, extra: 'tuft' },
+  { name: 'Rosa med hår', skin: 0xf28fb5, extra: 'hair' }
+];
+const G = {
+  top: new THREE.SphereGeometry(1, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2),
+  bot: new THREE.SphereGeometry(1, 28, 14, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+  disc: new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2),
+  ball: new THREE.SphereGeometry(1, 20, 14),
+  cone: new THREE.ConeGeometry(1, 1, 16),
+  body: new THREE.CylinderGeometry(0.045, 0.078, 0.36, 22)
+};
+const topY = (x, z) => 0.05 * Math.sqrt(Math.max(0, 1 - (x / 0.055) ** 2 - ((z + 0.085) / 0.085) ** 2));
+function buildPuppet(ci) {
+  const cfg = CHARS[ci], skin = std(cfg.skin), jaw = std(cfg.jaw ?? cfg.skin);
+  const inside = new THREE.MeshStandardMaterial({ color: 0x6b1524, roughness: 1, side: THREE.DoubleSide });
+  const head = new THREE.Group(), upper = new THREE.Group(), lower = new THREE.Group();
+  upper.position.z = lower.position.z = 0.03; head.add(upper, lower);
+  const mk = (geo, mat, sx, sy, sz, x, y, z, parent) => { const m = new THREE.Mesh(geo, mat); m.scale.set(sx, sy, sz); m.position.set(x, y, z); parent.add(m); return m; };
+  mk(G.top, jaw, 0.055, 0.05, 0.085, 0, 0, -0.085, upper);
+  mk(G.bot, jaw, 0.052, 0.032, 0.08, 0, 0, -0.085, lower);
+  mk(G.disc, inside, 0.053, 1, 0.083, 0, -0.001, -0.085, upper);
+  mk(G.disc, inside, 0.05, 1, 0.078, 0, 0.001, -0.085, lower);
+  mk(G.disc, new THREE.MeshStandardMaterial({ color: 0xff8fa3, roughness: 1, side: THREE.DoubleSide }), 0.026, 1, 0.045, 0, 0.003, -0.085, lower);
+  const white = std(0xffffff), black = std(0x111111), frog = cfg.extra === 'frog';
+  const eyes = [], pupils = [], r = frog ? 0.025 : 0.019;
+  for (const sx of [-1, 1]) {
+    const e = new THREE.Group(); e.position.set(sx * 0.027, frog ? 0.058 : 0.05, -0.075); upper.add(e);
+    mk(G.ball, white, r, r, r, 0, 0, 0, e);
+    const p = mk(G.ball, black, r * 0.48, r * 0.48, r * 0.48, 0, 0.003, -r * 0.75, e);
+    p.userData.z = -r * 0.75; eyes.push(e); pupils.push(p);
+  }
+  if (cfg.extra === 'horns') for (const sx of [-1, 1]) { const h = mk(G.cone, std(0xf3e9c9), 0.013, 0.055, 0.013, sx * 0.032, topY(0.032, -0.03) + 0.022, -0.03, upper); h.rotation.z = -sx * 0.4; }
+  if (cfg.extra === 'ears') for (const sx of [-1, 1]) { const h = mk(G.cone, skin, 0.022, 0.06, 0.012, sx * 0.034, topY(0.034, -0.03) + 0.024, -0.03, upper); h.rotation.z = -sx * 0.25; }
+  if (cfg.extra === 'tuft') for (const a of [-0.5, 0, 0.5]) { const h = mk(G.cone, std(0xf7c531), 0.008, 0.06, 0.008, a * 0.03, topY(0, -0.04) + 0.025, -0.04, upper); h.rotation.z = -a; }
+  if (cfg.extra === 'hair') { const hm = std(0x5a3418); for (let i = 0; i < 9; i++) { const x = -0.044 + i * 0.011, z = -0.02 - (i % 2) * 0.02; mk(G.ball, hm, 0.016, 0.016, 0.016, x, topY(x, z) + 0.008, z, upper); } }
+  const body = new THREE.Mesh(G.body, skin);
+  stage.add(head, body);
+  return { ci, head, body, upper, lower, eyes, pupils, mats: [skin, jaw, inside] };
+}
+const puppets = [null, null];
+const fwd = new THREE.Vector3();
+function applyState(i, s) {
+  let p = puppets[i];
+  if (!p || p.ci !== s.ch) { if (p) { p.head.removeFromParent(); p.body.removeFromParent(); p.mats.forEach(m => m.dispose()); } p = puppets[i] = buildPuppet(s.ch); }
+  p.head.visible = p.body.visible = !!s.on;
+  if (!s.on) return;
+  p.head.position.copy(s.p); p.head.quaternion.copy(s.q);
+  fwd.set(0, 0, -1).applyQuaternion(s.q);
+  p.body.position.set(s.p.x, s.p.y - 0.2, s.p.z); p.body.rotation.y = Math.atan2(-fwd.x, -fwd.z);
+  p.upper.rotation.x = s.m * 0.45; p.lower.rotation.x = -s.m * 0.5;
+  for (let k = 0; k < 2; k++) { p.eyes[k].scale.y = s.b > 0.5 ? 0.12 : 1; p.pupils[k].position.set(s.ex * 0.006, 0.003 + s.ey * 0.006, p.pupils[k].userData.z); }
+}
+const mkState = () => ({ on: 0, ch: 0, p: new THREE.Vector3(), q: new THREE.Quaternion(), m: 0, b: 0, ex: 0, ey: 0 });
+const cur = [mkState(), mkState()];
+
+// ---------- opptak: 13 tall per dukke per bilde ----------
+const FPS = 30, PF = 13, FRAME = PF * 2, MAXN = FPS * 300;
+function pack(arr, s) { arr.push(s.on, s.ch, s.p.x, s.p.y, s.p.z, s.q.x, s.q.y, s.q.z, s.q.w, s.m, s.b, s.ex, s.ey); }
+function unpack(d, o, s) { s.on = d[o]; s.ch = d[o + 1] | 0; s.p.set(d[o + 2], d[o + 3], d[o + 4]); s.q.set(d[o + 5], d[o + 6], d[o + 7], d[o + 8]); s.m = d[o + 9]; s.b = d[o + 10]; s.ex = d[o + 11]; s.ey = d[o + 12]; }
+let take = null, rec = null, playing = null, micStream = null;
+const audioEl = new Audio(); let audioURL = null, actx = null, audioDest = null;
+function setTake(t) {
+  take = t;
+  if (audioURL) URL.revokeObjectURL(audioURL); audioURL = null;
+  if (t && t.audio) { audioURL = URL.createObjectURL(t.audio); audioEl.src = audioURL; }
+  updateTakeUI();
+}
+function updateTakeUI() {
+  const has = !!(take && take.n);
+  $('play').disabled = $('video').disabled = !has || renderer.xr.isPresenting;
+  $('play').textContent = playing ? 'Stopp' : 'Spill av';
+  $('takeInfo').textContent = has ? `Opptak: ${(take.n / take.fps).toFixed(1)} sek${take.audio ? ' med lyd' : ' uten lyd'}. Et nytt opptak erstatter dette.` : 'Ingen opptak ennå.';
+}
+function startRec() {
+  if (rec) return; stopPlay();
+  rec = { data: [], n: 0, t0: performance.now(), mr: null, chunks: [] };
+  if (micStream) { try { rec.mr = new MediaRecorder(micStream); rec.mr.ondataavailable = e => { if (e.data.size) rec && rec.chunks.push(e.data); }; rec.mr.start(); } catch (e) { rec.mr = null; } }
+}
+async function stopRec() {
+  if (!rec) return; const r = rec; rec = null;
+  let audio = null;
+  if (r.mr) { await new Promise(res => { r.mr.ondataavailable = e => { if (e.data.size) r.chunks.push(e.data); }; r.mr.onstop = res; try { r.mr.stop(); } catch (e) { res(); } }); if (r.chunks.length) audio = new Blob(r.chunks, { type: r.mr.mimeType }); }
+  if (r.n < FPS / 2) return;
+  const t = { n: r.n, fps: FPS, data: new Float32Array(r.data), audio };
+  setTake(t);
+  try { await dbSet('take', t); } catch (e) { setStatus('Opptaket ligger i minnet, men kunne ikke lagres til neste gang.'); }
+}
+function startPlay(onEnd) {
+  if (!take || rec) return;
+  playing = { t0: performance.now(), onEnd };
+  if (take.audio) { try { audioEl.currentTime = 0; audioEl.play().catch(() => {}); } catch (e) {} }
+  updateTakeUI();
+}
+function stopPlay() {
+  if (!playing) return; const p = playing; playing = null;
+  try { audioEl.pause(); } catch (e) {}
+  if (p.onEnd) p.onEnd(); updateTakeUI();
+}
+
+// ---------- inndata ----------
+const ctrls = [0, 1].map(i => {
+  const c = renderer.xr.getController(i), h = renderer.xr.getHand(i); scene.add(c, h);
+  const o = { c, h, src: null, prev: [] };
+  c.addEventListener('connected', e => { o.src = e.data; o.prev = []; });
+  c.addEventListener('disconnected', () => { o.src = null; });
+  return o;
+});
+const byHand = h => ctrls.find(o => o.src && o.src.handedness === h);
+const btn = (o, i) => { const b = o.src.gamepad && o.src.gamepad.buttons[i]; return b ? b.value || (b.pressed ? 1 : 0) : 0; };
+function edge(o, i) { const now = btn(o, i) > 0.5, was = !!o.prev[i]; o.prev[i] = now; return now && !was; }
+const sInv = new THREE.Matrix4(), sQInv = new THREE.Quaternion(), tv = new THREE.Vector3();
+const blinkT = [3, 4.5];
+function liveState(i, dt) {
+  const s = cur[i], o = byHand(i === 0 ? 'left' : 'right');
+  s.ch = settings.chars[i]; s.on = 0;
+  if (!o) return s;
+  let m = 0, b = 0, ex = 0, ey = 0;
+  if (o.src.hand) {
+    const j = o.h.joints, w = j['wrist'], th = j['thumb-tip'], ix = j['index-finger-tip'];
+    if (!w || !w.visible || !th || !ix) return s;
+    s.q.copy(w.quaternion); s.p.copy(w.position).add(tv.set(0, 0, -0.09).applyQuaternion(s.q));
+    m = THREE.MathUtils.clamp((th.position.distanceTo(ix.position) - 0.025) / 0.07, 0, 1);
+  } else {
+    if (!o.c.visible || !o.src.gamepad) return s;
+    s.q.copy(o.c.quaternion); s.p.copy(o.c.position).add(tv.set(0, 0, -0.04).applyQuaternion(s.q));
+    m = btn(o, 0); b = btn(o, 1) > 0.5 ? 1 : 0;
+    const ax = o.src.gamepad.axes; ex = ax[2] || 0; ey = -(ax[3] || 0);
+  }
+  blinkT[i] -= dt; if (blinkT[i] < -0.12) blinkT[i] = 2.5 + Math.random() * 3.5;
+  if (blinkT[i] < 0) b = 1;
+  s.p.applyMatrix4(sInv); s.q.premultiply(sQInv);
+  s.m += (m - s.m) * Math.min(1, dt * 25); s.b = b; s.ex = ex; s.ey = ey; s.on = 1;
+  return s;
+}
+function idleState(i, t) {
+  const s = cur[i]; s.on = 1; s.ch = settings.chars[i];
+  s.p.set(i ? 0.2 : -0.2, 0.17 + Math.sin(t * 1.3 + i * 2) * 0.012, -0.38);
+  s.q.setFromEuler(new THREE.Euler(0, (i ? 1 : -1) * 0.25 + Math.sin(t * 0.7 + i) * 0.15, 0));
+  s.m = Math.max(0, Math.sin(t * 2 + i * 3)) * 0.25; s.b = (t + i * 1.7) % 4 < 0.12 ? 1 : 0; s.ex = s.ey = 0;
+  return s;
+}
+let placed = false;
+function placeStage() {
+  camera.getWorldPosition(tv); if (tv.y < 0.4) return;
+  fwd.set(0, 0, -1).applyQuaternion(camera.quaternion);
+  stage.position.set(tv.x, tv.y - 0.3, tv.z); stage.rotation.y = Math.atan2(-fwd.x, -fwd.z);
+  placed = true;
+}
+
+// ---------- økt ----------
+async function start(ar) {
+  try {
+    const session = await navigator.xr.requestSession(ar ? 'immersive-ar' : 'immersive-vr', { optionalFeatures: ['local-floor', 'hand-tracking'] });
+    bgXR = ar ? null : new THREE.Color(0x1b1d24);
+    await renderer.xr.setSession(session);
+    placed = false; stopPlay(); updateTakeUI();
+    session.addEventListener('end', async () => { stopPlay(); await stopRec(); updateTakeUI(); setStatus('VR avsluttet.'); });
+  } catch (e) { setStatus('Kunne ikke starte: ' + e.message); }
+}
+$('vr').onclick = () => start(false);
+$('ar').onclick = () => start(true);
+
+let lastT = performance.now(), autoStarted = false;
+const clockStr = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+renderer.setAnimationLoop(() => {
+  const now = performance.now(), dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+  const xr = renderer.xr.isPresenting;
+  if (xr) {
+    if (!placed) { placeStage(); autoStarted = false; }
+    stage.updateMatrixWorld(true); sInv.copy(stage.matrixWorld).invert(); sQInv.copy(stage.quaternion).invert();
+    if (placed && settings.auto && !autoStarted) { autoStarted = true; startRec(); }
+    const L = byHand('left'), R = byHand('right');
+    for (const [o, i] of [[L, 0], [R, 1]]) {
+      if (!o || o.src.hand || !o.src.gamepad) continue;
+      if (edge(o, 4)) { settings.chars[i] = (settings.chars[i] + 1) % CHARS.length; saveSettings(); $('ch' + i).value = settings.chars[i]; }
+      if (edge(o, 5)) { if (i === 1) { rec ? stopRec() : startRec(); } else { playing ? stopPlay() : startPlay(); } }
+      if (edge(o, 3)) { if (i === 0) placeStage(); else { settings.monitor = !settings.monitor; saveSettings(); } }
+    }
+  }
+  // tilstand for dukkene
+  let fromTake = false;
+  if (playing) {
+    const idx = Math.floor((now - playing.t0) / 1000 * take.fps);
+    if (idx >= take.n) stopPlay(); else { unpack(take.data, idx * FRAME, cur[0]); unpack(take.data, idx * FRAME + PF, cur[1]); fromTake = true; }
+  }
+  if (!fromTake) for (let i = 0; i < 2; i++) xr ? liveState(i, dt) : idleState(i, now / 1000);
+  applyState(0, cur[0]); applyState(1, cur[1]);
+  if (rec) {
+    const want = Math.floor((now - rec.t0) / 1000 * FPS) + 1;
+    while (rec.n < want && rec.n < MAXN) { pack(rec.data, cur[0]); pack(rec.data, cur[1]); rec.n++; }
+    if (rec.n >= MAXN) stopRec();
+  }
+
+  if (xr) {
+    if (rec) setBoard('● TAR OPP  ' + clockStr(rec.n / FPS), '#ff5a5a', ['B: stopp opptaket']);
+    else if (playing) setBoard('▶ Spiller av', '#7fd67f', ['Y: stopp']);
+    else setBoard('Klar', '#f3c969', ['B: start opptak   ·   Y: spill av' + (take ? '' : ' (ingen opptak)'), 'A / X: bytt dukke   ·   avtrekker: munn', 'Venstre spakklikk: flytt scenen hit', 'Høyre spakklikk: speil av/på']);
+    monitor.visible = false; board.visible = false;
+    if (settings.monitor) {
+      const prevRT = renderer.getRenderTarget();
+      renderer.xr.enabled = false; scene.background = BG_AUD;
+      renderer.setRenderTarget(rt); renderer.clear(); renderer.render(scene, audCam);
+      renderer.xr.enabled = true; renderer.setRenderTarget(prevRT);
+    }
+    monitor.visible = settings.monitor; board.visible = true;
+    scene.background = bgXR;
+    renderer.render(scene, camera);
+  } else {
+    monitor.visible = false; board.visible = false; scene.background = BG_AUD;
+    renderer.render(scene, audCam);
+  }
+});
+
+// ---------- side-UI ----------
+for (const i of [0, 1]) {
+  const sel = $('ch' + i);
+  CHARS.forEach((c, k) => { const o = document.createElement('option'); o.value = k; o.textContent = c.name; sel.append(o); });
+  sel.value = settings.chars[i]; sel.onchange = () => { settings.chars[i] = +sel.value; saveSettings(); };
+}
+$('backdrop').value = settings.backdrop; $('backdrop').onchange = e => { settings.backdrop = e.target.value; saveSettings(); drawBackdrop(); };
+$('auto').checked = settings.auto; $('auto').onchange = e => { settings.auto = e.target.checked; saveSettings(); };
+$('mic').onclick = async () => {
+  try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); $('micInfo').textContent = 'Mikrofonen er på. Stemmen din tas opp sammen med bevegelsene.'; $('mic').disabled = true; }
+  catch (e) { $('micInfo').textContent = 'Fikk ikke tilgang til mikrofonen: ' + e.message; }
+};
+$('play').onclick = () => { playing ? stopPlay() : startPlay(); };
+$('video').onclick = () => {
+  if (!take || playing) return;
+  const type = ['video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'].find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t));
+  if (!type) return setStatus('Denne nettleseren kan ikke lage video.');
+  const stream = renderer.domElement.captureStream(30);
+  if (take.audio) {
+    try {
+      if (!actx) { actx = new AudioContext(); const src = actx.createMediaElementSource(audioEl); src.connect(actx.destination); audioDest = actx.createMediaStreamDestination(); src.connect(audioDest); }
+      actx.resume(); audioDest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+    } catch (e) { setStatus('Lyden kunne ikke tas med i videoen.'); }
+  }
+  const chunks = [], mr = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 6e6 });
+  mr.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+  mr.onstop = () => {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(chunks, { type }));
+    a.download = 'dukketeater.' + (type.startsWith('video/mp4') ? 'mp4' : 'webm'); document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+    $('video').textContent = 'Lag video'; setStatus('Videoen er lastet ned.');
+  };
+  $('video').textContent = 'Lager video …'; setStatus('Spiller gjennom opptaket og tar det opp som video.');
+  mr.start(); startPlay(() => setTimeout(() => mr.stop(), 200));
+};
+
+(async () => {
+  try { const t = await dbGet('take'); if (t && t.n) setTake(t); else updateTakeUI(); } catch (e) { updateTakeUI(); }
+  if (!window.isSecureContext) { setStatus('Siden må åpnes via https for at VR skal fungere.'); return; }
+  if (!navigator.xr) { setStatus('WebXR finnes ikke i denne nettleseren. Åpne siden i Quest-nettleseren for å spille.'); return; }
+  const [vr, ar] = await Promise.all([
+    navigator.xr.isSessionSupported('immersive-vr').catch(() => false),
+    navigator.xr.isSessionSupported('immersive-ar').catch(() => false)
+  ]);
+  $('vr').disabled = !vr; $('ar').disabled = !ar;
+  if (!vr && !ar) setStatus('Denne enheten støtter ikke VR. Åpne siden i Quest-nettleseren for å spille.');
+})();
+</script>
+</body>
+</html>
