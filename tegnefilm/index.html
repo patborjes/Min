@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tegnefilm VR</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 18px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; background: #15171c; color: #e8e8ea; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 18px 60px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  .sub { color: #9aa0ab; margin: 0 0 20px; }
+  section { background: #1e2129; border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
+  h2 { font-size: 17px; margin: 0 0 10px; color: #b9c2d6; font-weight: 600; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .trk { justify-content: space-between; margin: 6px 0; }
+  button, label.btn { font: inherit; background: #2f6fed; color: #fff; border: 0; border-radius: 10px; padding: 12px 18px; cursor: pointer; }
+  button.sec, label.btn.sec { background: #343947; }
+  button.warn { background: #6b2f35; }
+  button:disabled { opacity: .4; cursor: default; }
+  input[type=file] { display: none; }
+  .field { display: grid; grid-template-columns: 150px 1fr; gap: 10px; align-items: center; margin: 8px 0; }
+  select { font: inherit; background: #2a2e38; color: #e8e8ea; border: 1px solid #3a4050; border-radius: 8px; padding: 6px 8px; }
+  #status { color: #f3c969; min-height: 1.4em; margin: 6px 0 0; }
+  .hint { color: #9aa0ab; font-size: 15px; }
+  ul { margin: 6px 0 0; padding-left: 22px; }
+  li { margin: 3px 0; }
+  kbd { background: #343947; border-radius: 5px; padding: 1px 6px; font-size: 14px; }
+  #screen canvas { display: block; width: 100% !important; height: auto !important; border-radius: 10px; background: #000; }
+  #catalog { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; margin-top: 12px; max-height: 520px; overflow: auto; }
+  #catalog[hidden] { display: none; }
+  button.cat { background: #2a2e38; padding: 6px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; }
+  button.cat img { width: 88px; height: 88px; object-fit: cover; border-radius: 6px; background: #1a1c22; }
+  a { color: #8fb4ff; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+  "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.5.5/lib/three-vrm.module.min.js"
+} }
+</script>
+</head>
+<body>
+<main>
+  <h1>Tegnefilm VR</h1>
+  <p class="sub">Du er figuren: hodet og hendene dine styrer en 3D-figur. Ta opp rolle for rolle, klipp mellom kameraer og lag video.</p>
+
+  <section>
+    <h2>Film</h2>
+    <div id="screen"></div>
+    <p id="status"></p>
+    <p id="takeInfo" class="hint"></p>
+    <div id="tracks"></div>
+    <div class="row">
+      <button id="play" disabled>Spill av</button>
+      <button id="video" disabled>Lag video</button>
+      <button id="clear" class="warn">Slett hele filmen</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>1 · Figur og sted</h2>
+    <div class="field"><span>Figur</span><select id="avatar"></select></div>
+    <div class="row">
+      <button id="browse" class="sec">Vis alle 300 figurer</button>
+      <label class="btn sec" for="upload">Last opp egen .vrm</label>
+      <input type="file" id="upload" accept=".vrm">
+    </div>
+    <div id="catalog" hidden></div>
+    <div class="field"><span>Sted</span>
+      <select id="env"><option value="eng">Eng</option><option value="natt">Natt</option><option value="rom">Stue</option><option value="gronn">Grønnskjerm</option></select></div>
+    <p class="hint">Figuren du velger her er den du spiller neste rolle med. Egne figurer kan du lage gratis i VRoid Studio eller hente som .vrm fra VRoid Hub.</p>
+  </section>
+
+  <section>
+    <h2>2 · Lyd</h2>
+    <div class="row"><button id="mic" class="sec">Slå på mikrofon</button><span id="micInfo" class="hint">Uten mikrofon tas bare bevegelsene opp.</span></div>
+  </section>
+
+  <section>
+    <h2>3 · Start</h2>
+    <div class="row">
+      <button id="vr" disabled>Start i VR</button>
+      <button id="ar" disabled>Start med passthrough</button>
+    </div>
+    <ul class="hint">
+      <li>Stå rett når du starter. Da tilpasses figuren høyden din, og du står på merket foran kameraet. En stor skjerm foran deg viser det kameraet ser, speilvendt.</li>
+      <li><b>Høyre hånd:</b> <kbd>avtrekker</kbd> åpner munnen, <kbd>spak</kbd> styrer øynene, <kbd>grep</kbd> knytter hånden. <kbd>A</kbd> bytter kamera, <kbd>B</kbd> starter og stopper opptak.</li>
+      <li><b>Venstre hånd:</b> <kbd>avtrekker</kbd> gir ansiktsuttrykk, <kbd>spakklikk</kbd> bytter hvilket. <kbd>Spak</kbd> flytter deg rundt på settet, <kbd>grep</kbd> knytter hånden. <kbd>X</kbd> stiller deg på merket igjen, <kbd>Y</kbd> spiller av.</li>
+      <li><b>Flere roller:</b> ta opp én rolle, gå ut, velg en ny figur og ta opp igjen. De forrige rollene spilles av rundt deg mens du spiller den nye.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Om figurene</h2>
+    <p class="hint">De tegnede figurene er fra <a href="https://github.com/toxsam/open-source-avatars">100Avatars</a> av Polygonal Mind og er frigitt som CC0. Animejenta er VRM1_Constraint_Twist_Sample, © 2022 pixiv Inc., under <a href="https://vrm.dev/licenses/1.0/">VRM Public License 1.0</a>. De tegnede figurene har munn og blunk, men ikke øyne som kan styres eller andre ansiktsuttrykk. Det har animejenta og de fleste figurer fra VRoid.</p>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>

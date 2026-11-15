@@ -1,0 +1,8 @@
+Figurene i denne mappen:
+
+- Alle filer unntatt VRM1_Constraint_Twist_Sample.vrm er fra 100Avatars av Polygonal Mind,
+  frigitt som CC0 (https://creativecommons.org/publicdomain/zero/1.0/).
+  Kilde: https://github.com/toxsam/open-source-avatars
+
+- VRM1_Constraint_Twist_Sample.vrm: (c) 2022 pixiv Inc., VRM Public License 1.0
+  (https://vrm.dev/licenses/1.0/). Kilde: https://github.com/vrm-c/vrm-specification
