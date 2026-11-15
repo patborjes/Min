@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Romstrek VR</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 18px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; background: #15171c; color: #e8e8ea; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 18px 60px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  .sub { color: #9aa0ab; margin: 0 0 20px; }
+  section { background: #1e2129; border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
+  h2 { font-size: 17px; margin: 0 0 10px; color: #b9c2d6; font-weight: 600; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  button { font: inherit; background: #2f6fed; color: #fff; border: 0; border-radius: 10px; padding: 12px 18px; cursor: pointer; }
+  button.sec { background: #343947; }
+  button.warn { background: #6b2f35; }
+  button:disabled { opacity: .4; cursor: default; }
+  .field { display: grid; grid-template-columns: 170px 1fr 60px; gap: 10px; align-items: center; margin: 8px 0; }
+  .field output { text-align: right; color: #9aa0ab; }
+  select { font: inherit; background: #2a2e38; color: #e8e8ea; border: 1px solid #3a4050; border-radius: 8px; padding: 6px 8px; }
+  #status { color: #f3c969; min-height: 1.4em; margin: 6px 0 0; }
+  .hint { color: #9aa0ab; font-size: 15px; }
+  ol { margin: 6px 0 0; padding-left: 22px; }
+  li { margin: 3px 0; }
+  kbd { background: #343947; border-radius: 5px; padding: 1px 6px; font-size: 14px; }
+  .view { margin: 14px 0; }
+  .view canvas { display: block; width: 100%; height: auto; background: #fff; border-radius: 10px; margin-bottom: 8px; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<main>
+  <h1>Romstrek VR</h1>
+  <p class="sub">Tegn streker i rommet, velg et utsnitt og få det som SVG til plotteren. Med passthrough kan du tegne av møbler og ting rundt deg.</p>
+
+  <section>
+    <h2>1 · Innstillinger</h2>
+    <div class="field"><span>Tegnehånd</span>
+      <select id="hand"><option value="right">Høyre</option><option value="left">Venstre</option></select><span></span></div>
+    <div class="field"><span>Papirformat</span>
+      <select id="format"><option value="A5">A5</option><option value="A4">A4</option><option value="A3">A3</option></select><span></span></div>
+    <div class="field"><span>Utjevning</span><input type="range" id="smooth" min="0" max="0.95" step="0.05"><output id="smoothO"></output></div>
+    <div class="field"><span>Strektykkelse</span><input type="range" id="width" min="0.2" max="3" step="0.1"><output id="widthO"></output></div>
+  </section>
+
+  <section>
+    <h2>2 · Start</h2>
+    <div class="row">
+      <button id="ar" disabled>Start med passthrough</button>
+      <button id="vr" disabled>Start i VR</button>
+    </div>
+    <p id="status"></p>
+    <ol class="hint">
+      <li><b>Tegnehånd:</b> <kbd>avtrekker</kbd> tegner fra den lille kula foran kontrolleren. <kbd>A</kbd>/<kbd>X</kbd> angrer. <kbd>B</kbd>/<kbd>Y</kbd> bytter mellom frihånd og rett linje. Rette linjer fester seg til endepunkter i nærheten.</li>
+      <li><b>Flytte tegningen:</b> hold <kbd>grep</kbd> for å flytte og dreie den. Hold begge grep for å skalere.</li>
+      <li><b>Utsnitt (andre hånd):</b> hold <kbd>avtrekker</kbd> for å se papirrammen foran deg, og slipp for å lagre utsnittet. <kbd>Spak opp/ned</kbd> endrer rammestørrelsen, <kbd>Y</kbd>/<kbd>B</kbd> bytter stående/liggende, <kbd>X</kbd>/<kbd>A</kbd> sletter siste utsnitt.</li>
+      <li>Gå ut av VR og last ned SVG for hvert utsnitt under.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>3 · Utsnitt</h2>
+    <p id="docInfo" class="hint"></p>
+    <div id="views"></div>
+    <div class="row">
+      <button id="undo" class="sec">Angre siste strek</button>
+      <button id="clear" class="warn">Slett alt</button>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import * as THREE from 'three';
+
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
+};
+const settings = Object.assign({ hand: 'right', format: 'A4', smoothing: 0.4, width: 0.5, landscape: true, frameW: 0.3 }, LS.get('rs_settings', {}));
+// streker: flate lister [x,y,z,…] i tegningens egne koordinater (meter). xf: tegningens plassering i rommet.
+// utsnitt: { V:[16] tegning→kamera, fw, fh, fd, landscape }
+let doc = Object.assign({ strokes: [], views: [], xf: null }, LS.get('rs_doc', {}));
+const $ = id => document.getElementById(id);
+const saveSettings = () => LS.set('rs_settings', settings);
+const saveDoc = () => { if (!LS.set('rs_doc', doc)) setStatus('Klarte ikke å lagre lokalt (lagringen er full?)'); };
+function setStatus(t) { $('status').textContent = t || ''; }
+const FORMATS = { A5: [210, 148], A4: [297, 210], A3: [420, 297] }; // liggende, mm
+
+// ---------- MATH-START ----------
+function simplify(flat, eps) {
+  const n = flat.length / 2;
+  if (n < 3) return flat.slice();
+  const keep = new Uint8Array(n); keep[0] = keep[n - 1] = 1;
+  const stack = [[0, n - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop();
+    const ax = flat[2 * a], ay = flat[2 * a + 1], bx = flat[2 * b], by = flat[2 * b + 1];
+    const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy);
+    let maxD = -1, idx = -1;
+    for (let i = a + 1; i < b; i++) {
+      const px = flat[2 * i], py = flat[2 * i + 1];
+      const d = L < 1e-12 ? Math.hypot(px - ax, py - ay) : Math.abs(dy * px - dx * py + bx * ay - by * ax) / L;
+      if (d > maxD) { maxD = d; idx = i; }
+    }
+    if (maxD > eps) { keep[idx] = 1; stack.push([a, idx], [idx, b]); }
+  }
+  const out = [];
+  for (let i = 0; i < n; i++) if (keep[i]) out.push(flat[2 * i], flat[2 * i + 1]);
+  return out;
+}
+// Liang–Barsky: klipp linjestykke mot [0,W]×[0,H]. Returnerer [ax,ay,bx,by,endeKlippet] eller null.
+function clipRect(ax, ay, bx, by, W, H) {
+  let t0 = 0, t1 = 1; const dx = bx - ax, dy = by - ay;
+  const P = [-dx, dx, -dy, dy], Q = [ax, W - ax, ay, H - ay];
+  for (let i = 0; i < 4; i++) {
+    if (Math.abs(P[i]) < 1e-12) { if (Q[i] < 0) return null; }
+    else { const r = Q[i] / P[i]; if (P[i] < 0) { if (r > t1) return null; if (r > t0) t0 = r; } else { if (r < t0) return null; if (r < t1) t1 = r; } }
+  }
+  return [ax + t0 * dx, ay + t0 * dy, ax + t1 * dx, ay + t1 * dy, t1 < 1];
+}
+// Projiser 3D-streker gjennom et utsnitt til papirkoordinater (mm). V = 4x4 kolonnevis, tegning→kamera.
+function projectStrokes(strokes, V, fw, fh, fd, W, H) {
+  const near = 0.02, out = [];
+  const cam = (s, i) => {
+    const x = s[i], y = s[i + 1], z = s[i + 2];
+    return [V[0] * x + V[4] * y + V[8] * z + V[12], V[1] * x + V[5] * y + V[9] * z + V[13], V[2] * x + V[6] * y + V[10] * z + V[14]];
+  };
+  const proj = c => [(c[0] * fd / -c[2] / fw + 0.5) * W, (0.5 - c[1] * fd / -c[2] / fh) * H];
+  const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  for (const s of strokes) {
+    let cur = null, prev = null;
+    const flush = () => { if (cur && cur.length >= 4) out.push(cur); cur = null; };
+    for (let i = 0; i < s.length; i += 3) {
+      const c = cam(s, i);
+      if (prev) {
+        let a = prev, b = c, endCut = false;
+        const ain = a[2] < -near, bin = b[2] < -near;
+        if (!ain && !bin) { flush(); prev = c; continue; }
+        if (!ain) a = lerp(a, b, (-near - a[2]) / (b[2] - a[2]));
+        if (!bin) { b = lerp(a, b, (-near - a[2]) / (b[2] - a[2])); endCut = true; }
+        const pa = proj(a), pb = proj(b), cl = clipRect(pa[0], pa[1], pb[0], pb[1], W, H);
+        if (!cl) flush();
+        else {
+          const n = cur ? cur.length : 0;
+          if (cur && Math.abs(cur[n - 2] - cl[0]) < 1e-6 && Math.abs(cur[n - 1] - cl[1]) < 1e-6) cur.push(cl[2], cl[3]);
+          else { flush(); cur = [cl[0], cl[1], cl[2], cl[3]]; }
+          if (cl[4] || endCut) flush();
+        }
+      }
+      prev = c;
+    }
+    flush();
+  }
+  return out;
+}
+// ---------- MATH-END ----------
+
+// ---------- eksport og forhåndsvisning ----------
+function viewPaper(v) { const [L, S] = FORMATS[settings.format]; return v.landscape ? [L, S] : [S, L]; }
+function viewPolylines(v) { const [W, H] = viewPaper(v); return projectStrokes(doc.strokes, v.V, v.fw, v.fh, v.fd, W, H); }
+function buildSVG(v) {
+  const [W, H] = viewPaper(v), f = n => (Math.round(n * 100) / 100).toString();
+  const paths = viewPolylines(v).map(pl => {
+    const p = simplify(pl, 0.08);
+    let d = 'M' + f(p[0]) + ' ' + f(p[1]);
+    for (let i = 2; i < p.length; i += 2) d += 'L' + f(p[i]) + ' ' + f(p[i + 1]);
+    return `  <path d="${d}"/>`;
+  }).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="0 0 ${W} ${H}">
+ <g fill="none" stroke="#000" stroke-width="${settings.width}" stroke-linecap="round" stroke-linejoin="round">
+${paths}
+ </g>
+</svg>
+`;
+}
+function download(name, text) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'image/svg+xml' }));
+  a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function renderViews() {
+  const box = $('views'); box.textContent = '';
+  $('docInfo').textContent = `${doc.strokes.length} streker · ${doc.views.length} utsnitt` +
+    (doc.views.length ? '' : '. Hold avtrekkeren på den andre hånden i VR og slipp for å lagre et utsnitt.');
+  doc.views.forEach((v, i) => {
+    const [W, H] = viewPaper(v), div = document.createElement('div'); div.className = 'view';
+    const cv = document.createElement('canvas'); cv.width = 1200; cv.height = Math.round(1200 * H / W);
+    const ctx = cv.getContext('2d'), k = cv.width / W;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.strokeStyle = '#111'; ctx.lineCap = ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(1, settings.width * k);
+    for (const pl of viewPolylines(v)) {
+      ctx.beginPath(); ctx.moveTo(pl[0] * k, pl[1] * k);
+      for (let j = 2; j < pl.length; j += 2) ctx.lineTo(pl[j] * k, pl[j + 1] * k);
+      ctx.stroke();
+    }
+    const row = document.createElement('div'); row.className = 'row';
+    const lab = document.createElement('span'); lab.className = 'hint'; lab.textContent = `Utsnitt ${i + 1} · ${settings.format} ${v.landscape ? 'liggende' : 'stående'}`;
+    const dl = document.createElement('button'); dl.textContent = 'Last ned SVG';
+    dl.onclick = () => download(`romstrek-utsnitt-${i + 1}.svg`, buildSVG(v));
+    const cp = document.createElement('button'); cp.className = 'sec'; cp.textContent = 'Kopier SVG';
+    cp.onclick = async () => { try { await navigator.clipboard.writeText(buildSVG(v)); setStatus('SVG kopiert.'); } catch (e) { setStatus('Kunne ikke kopiere.'); } };
+    const rm = document.createElement('button'); rm.className = 'sec'; rm.textContent = 'Slett utsnitt';
+    rm.onclick = () => { doc.views.splice(i, 1); saveDoc(); renderViews(); };
+    row.append(lab, dl, cp, rm); div.append(cv, row); box.append(div);
+  });
+}
+
+// ---------- innstillinger-UI ----------
+function bindRange(id, key, fmt) {
+  const el = $(id), out = $(id + 'O');
+  el.value = settings[key]; out.textContent = fmt(settings[key]);
+  el.addEventListener('input', () => { settings[key] = parseFloat(el.value); out.textContent = fmt(settings[key]); saveSettings(); if (key === 'width') renderViews(); });
+}
+bindRange('smooth', 'smoothing', v => Math.round(v * 100) + ' %');
+bindRange('width', 'width', v => v + ' mm');
+$('hand').value = settings.hand; $('hand').onchange = e => { settings.hand = e.target.value; saveSettings(); };
+$('format').value = settings.format; $('format').onchange = e => { settings.format = e.target.value; saveSettings(); renderViews(); };
+$('undo').onclick = () => { doc.strokes.pop(); saveDoc(); rebuildLines(); renderViews(); };
+$('clear').onclick = () => {
+  const b = $('clear');
+  if (b.dataset.armed) { doc.strokes = []; doc.views = []; doc.xf = null; group.matrix.identity(); saveDoc(); rebuildLines(); renderViews(); delete b.dataset.armed; b.textContent = 'Slett alt'; }
+  else { b.dataset.armed = 1; b.textContent = 'Trykk igjen for å slette'; setTimeout(() => { delete b.dataset.armed; b.textContent = 'Slett alt'; }, 3000); }
+};
+
+// ---------- three.js-scene ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(2, 2);
+renderer.domElement.style.cssText = 'position:fixed;left:-10px;top:-10px;width:2px;height:2px;';
+renderer.xr.enabled = true;
+renderer.xr.setReferenceSpaceType('local-floor');
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(70, 1, 0.01, 50);
+scene.add(camera);
+const grid = new THREE.GridHelper(6, 30, 0x45506a, 0x2a3040);
+scene.add(grid);
+
+const group = new THREE.Group(); group.matrixAutoUpdate = false; scene.add(group);
+if (doc.xf && doc.xf.length === 16) group.matrix.fromArray(doc.xf);
+const lineMat = new THREE.LineBasicMaterial({ color: 0x00e5ff });
+const previewMat = new THREE.LineBasicMaterial({ color: 0xf3c969 });
+
+class StrokeLine {
+  constructor(mat) {
+    this.n = 0; this.cap = 256; this.pos = new Float32Array(this.cap * 3);
+    this.line = new THREE.Line(new THREE.BufferGeometry(), mat || lineMat); this.line.frustumCulled = false;
+    this.bind();
+  }
+  bind() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3)); g.setDrawRange(0, this.n);
+    this.line.geometry.dispose(); this.line.geometry = g;
+  }
+  set(i, x, y, z) {
+    if (i >= this.cap) { this.cap *= 2; const p = new Float32Array(this.cap * 3); p.set(this.pos); this.pos = p; this.bind(); }
+    this.pos[3 * i] = x; this.pos[3 * i + 1] = y; this.pos[3 * i + 2] = z;
+    if (i >= this.n) this.n = i + 1;
+    this.line.geometry.attributes.position.needsUpdate = true; this.line.geometry.setDrawRange(0, this.n);
+  }
+  add(x, y, z) { this.set(this.n, x, y, z); }
+  flat() { return Array.from(this.pos.subarray(0, this.n * 3), v => Math.round(v * 1e4) / 1e4); }
+  dispose() { this.line.geometry.dispose(); this.line.removeFromParent(); }
+}
+let lines = [];
+function rebuildLines() {
+  lines.forEach(l => l.dispose()); lines = [];
+  for (const s of doc.strokes) {
+    const l = new StrokeLine();
+    for (let i = 0; i < s.length; i += 3) l.add(s[i], s[i + 1], s[i + 2]);
+    group.add(l.line); lines.push(l);
+  }
+}
+rebuildLines();
+
+// papirramme foran hodet
+const FD = 0.5;
+const frame = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-.5, -.5, 0), new THREE.Vector3(.5, -.5, 0), new THREE.Vector3(.5, .5, 0), new THREE.Vector3(-.5, .5, 0)]), new THREE.LineBasicMaterial({ color: 0xffffff, depthTest: false }));
+frame.renderOrder = 15; frame.visible = false; frame.position.z = -FD; camera.add(frame);
+const frameDims = () => { const [L, S] = FORMATS[settings.format], asp = settings.landscape ? L / S : S / L; return [settings.frameW, settings.frameW / asp]; };
+
+// HUD
+const hudCanvas = document.createElement('canvas'); hudCanvas.width = 1024; hudCanvas.height = 512;
+const hudTex = new THREE.CanvasTexture(hudCanvas); hudTex.colorSpace = THREE.SRGBColorSpace;
+const hud = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.1), new THREE.MeshBasicMaterial({ map: hudTex, transparent: true, depthTest: false }));
+hud.renderOrder = 20;
+let hudKey = '';
+function setHud(title, rows) {
+  const key = title + '|' + rows.join('|'); if (key === hudKey) return; hudKey = key;
+  const c = hudCanvas.getContext('2d');
+  c.clearRect(0, 0, 1024, 512);
+  c.fillStyle = 'rgba(18,20,28,0.88)'; c.beginPath(); c.roundRect(4, 4, 1016, 504, 36); c.fill();
+  c.fillStyle = '#f3c969'; c.font = 'bold 54px system-ui, sans-serif'; c.fillText(title, 40, 80);
+  c.fillStyle = '#fff'; c.font = '34px system-ui, sans-serif';
+  rows.forEach((l, i) => c.fillText(l, 40, 150 + i * 58));
+  hudTex.needsUpdate = true;
+}
+function placeHud(grip) {
+  if (grip) { if (hud.parent !== grip) { grip.add(hud); hud.position.set(0, 0.07, -0.04); hud.rotation.set(-0.75, 0, 0); } }
+  else if (hud.parent !== camera) { camera.add(hud); hud.position.set(0, -0.1, -0.45); hud.rotation.set(0, 0, 0); }
+}
+
+// ---------- kontrollere ----------
+const ctrls = [0, 1].map(i => {
+  const c = renderer.xr.getController(i), g = renderer.xr.getControllerGrip(i);
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.004, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
+  dot.renderOrder = 12; c.add(dot);
+  scene.add(c, g);
+  const o = { c, g, dot, src: null, prev: [] };
+  c.addEventListener('connected', e => { o.src = e.data; o.prev = []; });
+  c.addEventListener('disconnected', () => { o.src = null; });
+  return o;
+});
+const byHand = h => ctrls.find(o => o.src && o.src.gamepad && o.src.handedness === h);
+const down = (o, i) => !!(o && o.src.gamepad.buttons[i] && o.src.gamepad.buttons[i].pressed);
+function edge(o, i) { const now = down(o, i), was = !!o.prev[i]; o.prev[i] = now; return now && !was; }
+function released(o, i, key) { const now = down(o, i), was = !!o.prev[key]; o.prev[key] = now; return !now && was; }
+function pulse(o, s, ms) { try { o.src.gamepad.hapticActuators?.[0]?.pulse(s, ms); } catch (e) {} }
+
+// ---------- tilstand ----------
+let lineMode = false, drawing = null, filt = null, msg = '', msgUntil = 0, lastT = 0;
+let grab = null; // { n, ... }
+const gInv = new THREE.Matrix4(), v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), m1 = new THREE.Matrix4(), m2 = new THREE.Matrix4(), q = new THREE.Quaternion();
+const flash = (t, ms = 2500) => { msg = t; msgUntil = performance.now() + ms; };
+const groupScale = () => Math.hypot(group.matrix.elements[0], group.matrix.elements[1], group.matrix.elements[2]);
+
+function snap(local) {
+  const r = 0.015 / groupScale(); let best = null, bd = r;
+  for (const s of doc.strokes) for (const i of [0, s.length - 3]) {
+    const d = Math.hypot(s[i] - local.x, s[i + 1] - local.y, s[i + 2] - local.z);
+    if (d < bd) { bd = d; best = [s[i], s[i + 1], s[i + 2]]; }
+  }
+  if (best) local.set(best[0], best[1], best[2]);
+  return local;
+}
+function endStroke() {
+  if (!drawing) return;
+  const l = drawing.line;
+  if (drawing.straight) { v1.set(l.pos[3], l.pos[4], l.pos[5]); snap(v1); l.set(1, v1.x, v1.y, v1.z); }
+  const flat = l.flat();
+  const len = Math.hypot(flat[flat.length - 3] - flat[0], flat[flat.length - 2] - flat[1], flat[flat.length - 1] - flat[2]);
+  if (l.n >= 2 && (!drawing.straight || len * groupScale() > 0.005)) { doc.strokes.push(flat); lines.push(l); saveDoc(); }
+  else l.dispose();
+  drawing = null; filt = null;
+}
+function updateGrab(held) {
+  if (!held.length) { if (grab) { doc.xf = group.matrix.toArray().map(v => Math.round(v * 1e5) / 1e5); saveDoc(); grab = null; } return; }
+  if (!grab || grab.n !== held.length || grab.a !== held[0]) {
+    grab = { n: held.length, a: held[0] };
+    if (held.length === 1) grab.off = m1.copy(held[0].g.matrixWorld).invert().multiply(group.matrix).clone();
+    else {
+      const pa = held[0].g.position, pb = held[1].g.position;
+      grab.mid = pa.clone().add(pb).multiplyScalar(0.5); grab.dir = pb.clone().sub(pa); grab.d = Math.max(0.02, grab.dir.length()); grab.dir.normalize();
+      grab.m0 = group.matrix.clone();
+    }
+    return;
+  }
+  if (grab.n === 1) group.matrix.copy(held[0].g.matrixWorld).multiply(grab.off);
+  else {
+    const pa = held[0].g.position, pb = held[1].g.position;
+    v1.copy(pa).add(pb).multiplyScalar(0.5); v2.copy(pb).sub(pa);
+    const s = Math.max(0.02, v2.length()) / grab.d; v2.normalize();
+    q.setFromUnitVectors(grab.dir, v2);
+    m1.compose(v1, q, new THREE.Vector3(s, s, s));
+    m2.makeTranslation(-grab.mid.x, -grab.mid.y, -grab.mid.z);
+    group.matrix.copy(m1).multiply(m2).multiply(grab.m0);
+  }
+  group.matrixWorldNeedsUpdate = true;
+}
+
+async function start(ar) {
+  try {
+    const session = await navigator.xr.requestSession(ar ? 'immersive-ar' : 'immersive-vr', { optionalFeatures: ['local-floor'] });
+    scene.background = ar ? null : new THREE.Color(0x1b1d24);
+    grid.visible = !ar;
+    await renderer.xr.setSession(session);
+    drawing = null; grab = null; frame.visible = false;
+    session.addEventListener('end', () => { endStroke(); renderViews(); setStatus('VR avsluttet. Tegningen er lagret.'); });
+  } catch (e) { setStatus('Kunne ikke starte: ' + e.message); }
+}
+$('vr').onclick = () => start(false);
+$('ar').onclick = () => start(true);
+
+renderer.setAnimationLoop(() => {
+  if (!renderer.xr.isPresenting) return;
+  const tNow = performance.now(), dt = Math.min(0.05, (tNow - lastT) / 1000); lastT = tNow;
+  const pen = byHand(settings.hand), off = byHand(settings.hand === 'right' ? 'left' : 'right');
+  placeHud(off && off.g.visible ? off.g : null);
+  ctrls.forEach(o => o.dot.material.color.set(o === pen ? (drawing ? 0x33dd66 : 0x00e5ff) : 0x8899bb));
+
+  // flytte/skalere tegningen
+  const held = ctrls.filter(o => o.src && o.src.gamepad && down(o, 1));
+  if (held.length && drawing) endStroke();
+  updateGrab(held);
+  gInv.copy(group.matrix).invert();
+
+  // tegnehånd
+  if (pen) {
+    if (edge(pen, 4) && !drawing) { const s = doc.strokes.pop(), l = lines.pop(); if (l) l.dispose(); if (s) { saveDoc(); flash('Angret.', 1200); } }
+    if (edge(pen, 5) && !drawing) { lineMode = !lineMode; flash(lineMode ? 'Rett linje.' : 'Frihånd.', 1200); }
+    const want = down(pen, 0) && !down(pen, 1) && pen.c.visible;
+    if (want) {
+      const tip = pen.c.position;
+      if (!drawing) {
+        v1.copy(tip).applyMatrix4(gInv);
+        drawing = { line: new StrokeLine(lineMode ? previewMat : lineMat), straight: lineMode, last: tip.clone() };
+        if (lineMode) snap(v1);
+        drawing.line.add(v1.x, v1.y, v1.z); if (lineMode) drawing.line.add(v1.x, v1.y, v1.z);
+        group.add(drawing.line.line); filt = tip.clone(); pulse(pen, 0.25, 12);
+      } else if (drawing.straight) {
+        v1.copy(tip).applyMatrix4(gInv); drawing.line.set(1, v1.x, v1.y, v1.z);
+      } else {
+        filt.lerp(tip, 1 - settings.smoothing * 0.88);
+        if (filt.distanceTo(drawing.last) >= 0.002) { drawing.last.copy(filt); v1.copy(filt).applyMatrix4(gInv); drawing.line.add(v1.x, v1.y, v1.z); }
+      }
+    } else if (drawing) { if (drawing.straight) drawing.line.line.material = lineMat; endStroke(); }
+  } else if (drawing) endStroke();
+
+  // andre hånd: utsnitt
+  if (off) {
+    const [fw, fh] = frameDims();
+    const trig = down(off, 0) && !down(off, 1);
+    frame.visible = trig; frame.scale.set(fw, fh, 1);
+    if (released(off, 0, 'trigRel') && !down(off, 1)) {
+      const V = m1.copy(camera.matrixWorld).invert().multiply(group.matrix).toArray().map(v => Math.round(v * 1e6) / 1e6);
+      doc.views.push({ V, fw, fh, fd: FD, landscape: settings.landscape }); saveDoc();
+      flash(`Utsnitt ${doc.views.length} lagret.`); pulse(off, 0.6, 60);
+    }
+    if (edge(off, 5)) { settings.landscape = !settings.landscape; saveSettings(); flash(settings.landscape ? 'Liggende.' : 'Stående.', 1200); }
+    if (edge(off, 4)) { if (doc.views.pop()) { saveDoc(); flash('Siste utsnitt slettet.', 1500); } }
+    const sy = off.src.gamepad.axes[3] || 0;
+    if (Math.abs(sy) > 0.2 && !down(off, 1)) { settings.frameW = Math.min(0.9, Math.max(0.08, settings.frameW * (1 - sy * 0.8 * dt))); frame.visible = true; frame.scale.set(...frameDims(), 1); saveSettings(); }
+  } else frame.visible = false;
+
+  const pb = settings.hand === 'right' ? ['A', 'B'] : ['X', 'Y'], ob = settings.hand === 'right' ? ['X', 'Y'] : ['A', 'B'];
+  setHud(lineMode ? 'Rett linje' : 'Frihånd', [
+    `Avtrekker: tegn  ·  ${pb[0]}: angre  ·  ${pb[1]}: frihånd/linje`,
+    'Grep: flytt tegningen  ·  begge grep: skaler',
+    'Denne hånden: hold avtrekker = ramme, slipp = lagre',
+    `Spak: rammestørrelse  ·  ${ob[1]}: stående/liggende`,
+    `${ob[0]}: slett siste utsnitt`,
+    `${doc.strokes.length} streker  ·  ${doc.views.length} utsnitt   ${performance.now() < msgUntil ? msg : ''}`
+  ]);
+  renderer.render(scene, camera);
+});
+
+// ---------- oppstart ----------
+(async () => {
+  renderViews();
+  if (!window.isSecureContext) { setStatus('Siden må åpnes via https for at VR skal fungere.'); return; }
+  if (!navigator.xr) { setStatus('WebXR finnes ikke i denne nettleseren. Åpne siden i Quest-nettleseren.'); return; }
+  const [vr, ar] = await Promise.all([
+    navigator.xr.isSessionSupported('immersive-vr').catch(() => false),
+    navigator.xr.isSessionSupported('immersive-ar').catch(() => false)
+  ]);
+  $('vr').disabled = !vr; $('ar').disabled = !ar;
+  if (!vr && !ar) setStatus('Denne enheten støtter ikke VR. Åpne siden i Quest-nettleseren.');
+})();
+</script>
+</body>
+</html>
