@@ -57,6 +57,11 @@
       </select><span></span></div>
     <div class="field"><span>Pennehånd</span>
       <select id="hand"><option value="right">Høyre</option><option value="left">Venstre</option></select><span></span></div>
+    <div class="field"><span>Ark</span>
+      <select id="paper">
+        <option value="white">Hvitt ark (tegn digitalt)</option>
+        <option value="clear">Gjennomsiktig (ekte papir i passthrough)</option>
+      </select><span></span></div>
     <div class="field"><span>Berøringsgrense</span><input type="range" id="thr" min="0.5" max="10" step="0.5"><output id="thrO"></output></div>
     <div class="field"><span>Utjevning</span><input type="range" id="smooth" min="0" max="0.95" step="0.05"><output id="smoothO"></output></div>
     <div class="field"><span>Strektykkelse</span><input type="range" id="width" min="0.2" max="3" step="0.1"><output id="widthO"></output></div>
@@ -74,6 +79,7 @@
       <li><b>Spiss</b> (bare første gang): sett pennespissen i et fast punkt, for eksempel et lite hull i en papp. Hold <kbd>avtrekker</kbd> inne og vri kontrolleren i alle retninger i 3–5 sek. Slipp.</li>
       <li><b>Ark</b>: sett spissen på bordet i <i>nedre venstre</i>, <i>nedre høyre</i> og <i>øvre venstre</i> hjørne, og trykk <kbd>avtrekker</kbd> for hvert punkt.</li>
       <li><b>Tegn!</b> Pennehånd: <kbd>A</kbd>/<kbd>X</kbd> angrer, <kbd>B</kbd>/<kbd>Y</kbd> endrer bildets synlighet. Andre hånd: <kbd>X</kbd>/<kbd>A</kbd> kalibrerer spissen på nytt, <kbd>Y</kbd>/<kbd>B</kbd> kalibrerer arket på nytt.</li>
+      <li><b>Justering</b> (andre hånd, mens du ikke tegner): <kbd>spak opp/ned</kbd> hever og senker arket, <kbd>grep</kbd> + <kbd>spak</kbd> flytter arket sideveis, <kbd>avtrekker</kbd> slår det hvite arket av og på.</li>
     </ol>
   </section>
 
@@ -101,7 +107,7 @@ const LS = {
   del(k) { try { localStorage.removeItem(k); } catch (e) {} }
 };
 
-const settings = Object.assign({ mode: 'touch', hand: 'right', threshold: 3, smoothing: 0.5, width: 0.8 }, LS.get('ss_settings', {}));
+const settings = Object.assign({ mode: 'touch', hand: 'right', threshold: 3, smoothing: 0.5, width: 0.8, paper: 'white' }, LS.get('ss_settings', {}));
 let tipOffset = LS.get('ss_tip', null);              // [x,y,z] i kontrollerens grep-koordinater (meter)
 let doc = Object.assign({ strokes: [], paperWidthMm: null, aspect: null }, LS.get('ss_doc', {}));
 // streker: flate lister [x0,y0,x1,y1,…], x normalisert til arkbredde (0..1), y målt ovenfra i samme enhet
@@ -264,6 +270,7 @@ bindRange('thr', 'threshold', v => v + ' mm');
 bindRange('smooth', 'smoothing', v => Math.round(v * 100) + ' %');
 bindRange('width', 'width', v => v + ' mm');
 $('mode').value = settings.mode; $('mode').onchange = e => { settings.mode = e.target.value; saveSettings(); };
+$('paper').value = settings.paper; $('paper').onchange = e => { settings.paper = e.target.value; saveSettings(); applyPaper(); };
 $('hand').value = settings.hand; $('hand').onchange = e => { settings.hand = e.target.value; saveSettings(); };
 
 function download(name, text) {
@@ -316,6 +323,17 @@ const cursor = new THREE.Mesh(new THREE.RingGeometry(0.0015, 0.0028, 24), new TH
 cursor.position.z = 0.001; cursor.renderOrder = 10;
 sheet.add(areaMesh, paperMesh, imageMesh, outline, strokesGroup, cursor);
 const opacities = [0.6, 0.3, 0.85, 0]; let opIdx = 0;
+function applyPaper() {
+  const clear = settings.paper === 'clear';
+  paperMesh.visible = areaMesh.visible = !clear;
+  strokeMat.color.set(clear ? 0x00e5ff : 0x14143a);
+}
+applyPaper();
+let heightAdj = 0, lastT = 0;
+function moveSheet(dx, dy, dz) {
+  S.O.addScaledVector(S.X, dx).addScaledVector(S.Y, dy).addScaledVector(S.N, dz);
+  sheet.matrix.setPosition(S.O); sheet.matrixWorldNeedsUpdate = true;
+}
 
 // Pennespiss-visning
 const tipDot = new THREE.Mesh(new THREE.SphereGeometry(0.0025, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
@@ -336,8 +354,8 @@ function setHud(title, lines) {
   c.clearRect(0, 0, 1024, 512);
   c.fillStyle = 'rgba(18,20,28,0.88)'; c.beginPath(); c.roundRect(4, 4, 1016, 504, 36); c.fill();
   c.fillStyle = '#f3c969'; c.font = 'bold 56px system-ui, sans-serif'; c.fillText(title, 40, 84);
-  c.fillStyle = '#fff'; c.font = '40px system-ui, sans-serif';
-  lines.forEach((l, i) => c.fillText(l, 40, 160 + i * 62));
+  c.fillStyle = '#fff'; c.font = '36px system-ui, sans-serif';
+  lines.forEach((l, i) => c.fillText(l, 40, 156 + i * 60));
   hudTex.needsUpdate = true;
 }
 function placeHud(parentGrip) {
@@ -415,7 +433,7 @@ function setupSheet(p0, p1, p2) {
   imageMesh.scale.copy(paperMesh.scale); imageMesh.position.set(paperMesh.position.x, paperMesh.position.y, 0.0004);
   imageMesh.visible = !!imageMat.map;
   outline.scale.copy(paperMesh.scale); outline.position.set(paperMesh.position.x, paperMesh.position.y, 0.0006);
-  S.ok = true; sheet.visible = true;
+  S.ok = true; sheet.visible = true; heightAdj = 0;
   rebuildStrokeMeshes();
   return null;
 }
@@ -472,11 +490,23 @@ renderer.setAnimationLoop(() => {
   placeHud(off && off.g.visible ? off.g : null);
   const penB = settings.hand === 'right' ? ['A', 'B'] : ['X', 'Y'], offB = settings.hand === 'right' ? ['X', 'Y'] : ['A', 'B'];
   const note = performance.now() < msgUntil ? msg : '';
+  const tNow = performance.now(), dt = Math.min(0.05, (tNow - lastT) / 1000); lastT = tNow;
 
   // knapper på andre hånd
   if (off) {
     if (pressedEdge(off, 4)) { endStroke(); state = 'tip'; pivotSamples = []; flash('Kalibrerer spissen på nytt.'); }
     if (pressedEdge(off, 5)) { endStroke(); state = 'sheet'; sheetPts = []; flash('Kalibrerer arket på nytt.'); }
+    if (pressedEdge(off, 0)) {
+      settings.paper = settings.paper === 'clear' ? 'white' : 'clear'; saveSettings(); applyPaper(); $('paper').value = settings.paper;
+      flash(settings.paper === 'clear' ? 'Gjennomsiktig ark.' : 'Hvitt ark.', 1500);
+    }
+    if (state === 'draw' && S.ok && !drawing) {
+      const ax = off.src.gamepad.axes, dz = v => Math.abs(v) < 0.2 ? 0 : v;
+      const sx = dz(ax[2] || 0), sy = dz(ax[3] || 0);
+      const grip = !!(off.src.gamepad.buttons[1] && off.src.gamepad.buttons[1].pressed);
+      if (grip) moveSheet(sx * 0.02 * dt, -sy * 0.02 * dt, 0);
+      else if (sy) { const d = -sy * 0.006 * dt; moveSheet(0, 0, d); heightAdj += d; }
+    }
   }
 
   if (!pen || !pen.g.visible) {
@@ -586,7 +616,8 @@ renderer.setAnimationLoop(() => {
       settings.mode === 'touch' ? `Høyde over arket: ${(h * 1000).toFixed(1)} mm (grense ${settings.threshold} mm)` : 'Hold AVTREKKER for å tegne',
       `${penB[0]}: angre   ·   ${penB[1]}: bildets synlighet`,
       `${offB[0]}: kalibrer spiss   ·   ${offB[1]}: kalibrer ark`,
-      `${doc.strokes.length} streker`,
+      `Spak: arkhøyde (${heightAdj >= 0 ? '+' : ''}${(heightAdj * 1000).toFixed(1)} mm)  ·  grep + spak: flytt ark`,
+      `Avtrekker: ark av/på   ·   ${doc.strokes.length} streker`,
       note
     ]);
   }
