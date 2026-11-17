@@ -1,4 +1,4 @@
-/* Plotteriet Effekter 0.2.0. Ren JavaScript, ingen biblioteker. */
+/* Plotteriet Effekter 0.3.2. Ren JavaScript, ingen biblioteker. */
 (function () {
   'use strict';
 
@@ -207,9 +207,20 @@
     document.body.appendChild(bar);
     document.body.classList.add('pe-har-kjopsbar');
 
+    // Bare selve prisen: ved tilbud den nye prisen, ved prisområde fra og til. Aldri løpende tekst.
+    function prisTekst() {
+      if (!prisEl) { return ''; }
+      var kilde = prisEl.querySelector('ins') || prisEl;
+      var belop = kilde.querySelectorAll('.woocommerce-Price-amount');
+      if (belop.length) {
+        return Array.prototype.slice.call(belop, 0, 2).map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim(); }).join(' – ');
+      }
+      return prisEl.textContent.replace(/\s+/g, ' ').trim().slice(0, 40);
+    }
+
     function oppdater() {
       t.textContent = tittel ? tittel.textContent.trim() : '';
-      p.textContent = prisEl ? prisEl.textContent.replace(/\s+/g, ' ').trim() : '';
+      p.textContent = prisTekst();
       knapp.textContent = ekte.textContent.trim() || 'Kjøp';
       var av = ekte.disabled || ekte.classList.contains('disabled') || ekte.getAttribute('aria-disabled') === 'true';
       knapp.setAttribute('aria-disabled', av ? 'true' : 'false');

@@ -55,7 +55,7 @@
   .pe-kjop.pe-synlig { transform: none; visibility: visible; transition-delay: 0s; }
   .pe-kjop__tekst { flex: 1; min-width: 0; display: grid; line-height: 1.15; }
   .pe-kjop__tittel { font-weight: 600; font-size: .85rem; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pe-kjop__pris { font: 400 1.35rem/1.1 var(--fat, "Arial Rounded MT Bold", sans-serif); }
+  .pe-kjop__pris { font: 400 1.35rem/1.1 var(--fat, "Arial Rounded MT Bold", sans-serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pe-kjop__knapp {
     flex: none; cursor: pointer; border: 0; border-radius: 999px; min-height: 48px; padding: 0 24px;
     background: var(--y, #ffd31a); color: var(--ink, #111);

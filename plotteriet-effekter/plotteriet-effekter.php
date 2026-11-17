@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Plotteriet Effekter
  * Description: 3D-effekter og enklere kjøp for plotteriet.no: 3D på innrammede bilder og forsidens hovedbilde, blekkstrek under overskrifter, myk avsløring en fast kjøpsknapp på mobil og kortkoden [plotteriet_forhandsvis] der kunden ser bildet sitt tegnes som plotterskisse. Rører ikke pris, handlekurv eller kasse.
- * Version: 0.3.1
+ * Version: 0.3.2
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Author: Plotteriet
@@ -11,7 +11,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-const PLOTTERIET_EFFEKTER_VERSJON = '0.3.1';
+const PLOTTERIET_EFFEKTER_VERSJON = '0.3.2';
 
 /**
  * Hvilke moduler som er på. Slå av en modul uten å røre koden:
