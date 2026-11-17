@@ -1,0 +1,53 @@
+/* Plotteriet Effekter. Bruker temaets variabler (--y, --ink, --fat, --pop) når de finnes. */
+
+/* ── 3D-tilt og lysrefleks ─────────────────────────────────────────── */
+.pe-tilt {
+  transform: perspective(900px) rotateX(var(--pe-rx, 0deg)) rotateY(var(--pe-ry, 0deg));
+  transition: transform .5s var(--pop, cubic-bezier(.34, 1.56, .64, 1));
+  will-change: transform;
+}
+.pe-tilt.pe-aktiv { transition: transform .08s linear; }
+.pe-glare {
+  position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: radial-gradient(circle at var(--pe-gx, 50%) var(--pe-gy, 50%), rgba(255, 255, 255, .55), rgba(255, 255, 255, 0) 55%);
+  mix-blend-mode: soft-light; opacity: 0; transition: opacity .3s;
+}
+.pe-tilt.pe-aktiv .pe-glare { opacity: 1; }
+
+/* ── Myk avsløring ─────────────────────────────────────────────────── */
+.pe-js .pe-avslor:not(.pe-inn) { opacity: 0; translate: 0 36px; scale: .96; rotate: 1 0 0 14deg; }
+.pe-js .pe-avslor {
+  transition: opacity .7s ease, translate .8s var(--pop, cubic-bezier(.34, 1.56, .64, 1)), scale .8s var(--pop, cubic-bezier(.34, 1.56, .64, 1)), rotate .8s ease;
+}
+
+/* ── Fast kjøpsknapp på mobil ──────────────────────────────────────── */
+.pe-kjop { display: none; }
+@media (max-width: 820px) {
+  .pe-kjop {
+    display: flex; align-items: center; gap: 12px;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 900;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    background: var(--ink, #111); color: var(--y, #ffd31a);
+    box-shadow: 0 -10px 30px -12px rgba(0, 0, 0, .5);
+    transform: translateY(110%); visibility: hidden;
+    transition: transform .35s var(--pop, cubic-bezier(.34, 1.56, .64, 1)), visibility 0s .35s;
+  }
+  .pe-kjop.pe-synlig { transform: none; visibility: visible; transition-delay: 0s; }
+  .pe-kjop__tekst { flex: 1; min-width: 0; display: grid; line-height: 1.15; }
+  .pe-kjop__tittel { font-weight: 600; font-size: .85rem; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pe-kjop__pris { font: 400 1.35rem/1.1 var(--fat, "Arial Rounded MT Bold", sans-serif); }
+  .pe-kjop__knapp {
+    flex: none; cursor: pointer; border: 0; border-radius: 999px; min-height: 48px; padding: 0 24px;
+    background: var(--y, #ffd31a); color: var(--ink, #111);
+    font: 400 1.15rem/1 var(--fat, "Arial Rounded MT Bold", sans-serif);
+  }
+  .pe-kjop__knapp:focus-visible { outline: 3px solid var(--y, #ffd31a); outline-offset: 3px; }
+  .pe-kjop__knapp[aria-disabled="true"] { opacity: .75; }
+  body.pe-har-kjopsbar { padding-bottom: 84px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pe-tilt, .pe-tilt.pe-aktiv { transition: none; }
+  .pe-js .pe-avslor:not(.pe-inn) { opacity: 1; translate: none; scale: none; rotate: none; }
+  .pe-kjop, .pe-kjop.pe-synlig { transition: none; }
+}
