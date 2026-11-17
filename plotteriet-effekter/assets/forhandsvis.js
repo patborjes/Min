@@ -1,4 +1,4 @@
-/* Plotteriet forhåndsvisning 0.3.0. Bildet behandles i nettleseren og forlater aldri enheten. */
+/* Plotteriet forhåndsvisning 0.3.2. Bildet behandles i nettleseren og forlater aldri enheten. */
 (function () {
   'use strict';
 
@@ -31,6 +31,30 @@
   }
 
   function melding(tekst) { tall.textContent = tekst || ''; }
+
+  /* Uskarphet med boks av radius r (integralbilde, rask uansett størrelse). */
+  function boksUskarp(src, gw, gh, r) {
+    var W1 = gw + 1;
+    var I = new Float64Array(W1 * (gh + 1));
+    var x, y;
+    for (y = 1; y <= gh; y++) {
+      var rad = 0;
+      for (x = 1; x <= gw; x++) {
+        rad += src[(y - 1) * gw + (x - 1)];
+        I[y * W1 + x] = I[(y - 1) * W1 + x] + rad;
+      }
+    }
+    var ut = new Float32Array(gw * gh);
+    for (y = 0; y < gh; y++) {
+      var y0 = Math.max(0, y - r), y1 = Math.min(gh, y + r + 1);
+      for (x = 0; x < gw; x++) {
+        var x0 = Math.max(0, x - r), x1 = Math.min(gw, x + r + 1);
+        var sum = I[y1 * W1 + x1] - I[y0 * W1 + x1] - I[y1 * W1 + x0] + I[y0 * W1 + x0];
+        ut[y * gw + x] = sum / ((x1 - x0) * (y1 - y0));
+      }
+    }
+    return ut;
+  }
 
   /* ── Bildet til en mørkhetskart (0 = lyst, 1 = mørkt) i tegneflatens område ── */
   function mørkhetskart(img, W, H) {
@@ -65,16 +89,24 @@
       }
     }
 
-    // Strekk kontrasten mellom 2. og 98. persentil, så flate bilder også får tegning.
-    var sortert = Float32Array.from(uskarp).sort();
-    var lo = sortert[Math.floor(n * 0.02)];
-    var hi = sortert[Math.floor(n * 0.98)];
+    // Lokal kontrast: trekk fra et kraftig uskarpt bilde, så øyne, munn og kanter trer frem.
+    var stor = boksUskarp(uskarp, gw, gh, Math.max(4, Math.round(gw * 0.07)));
+    var t = new Float32Array(n);
+    for (i = 0; i < n; i++) {
+      var v0 = 0.5 * uskarp[i] + 0.5 * (0.5 + (uskarp[i] - stor[i]) * 2.4);
+      t[i] = v0 < 0 ? 0 : v0 > 1 ? 1 : v0;
+    }
+
+    // Strekk kontrasten mellom 3. og 97. persentil, så flate bilder også får tegning.
+    var sortert = Float32Array.from(t).sort();
+    var lo = sortert[Math.floor(n * 0.03)];
+    var hi = sortert[Math.floor(n * 0.97)];
     if (hi - lo < 0.05) { hi = lo + 0.05; }
     var m = new Float32Array(n);
     for (i = 0; i < n; i++) {
-      var v = (uskarp[i] - lo) / (hi - lo);
+      var v = (t[i] - lo) / (hi - lo);
       v = v < 0 ? 0 : v > 1 ? 1 : v;
-      m[i] = Math.pow(1 - v, 1.15);
+      m[i] = Math.pow(1 - v, 1.1);
     }
     return { m: m, gw: gw, gh: gh, ix: ix, iy: iy, iw: iw, ih: ih };
   }
@@ -89,32 +121,7 @@
 
   function snu(strek) { return strek.slice().reverse(); }
 
-  /* ── Skravur: bølgende linjer, større utslag der bildet er mørkt ── */
-  function skravur(k, gap) {
-    var ut = [];
-    var rader = Math.floor(k.ih / gap);
-    for (var r = 0; r < rader; r++) {
-      var y0 = k.iy + gap / 2 + r * gap;
-      var fase = 0, s = null, rad = [];
-      for (var x = k.ix; x <= k.ix + k.iw; x += 1.5) {
-        var d = mørk(k, x, y0);
-        if (d < 0.07) {
-          if (s && s.length > 1) { rad.push(s); }
-          s = null; fase += 0.2;
-          continue;
-        }
-        fase += 0.25 + d * 0.9;
-        if (!s) { s = []; }
-        s.push([x, y0 + Math.sin(fase) * d * gap * 0.5]);
-      }
-      if (s && s.length > 1) { rad.push(s); }
-      if (r % 2) { rad = rad.reverse().map(snu); } // pennen går frem og tilbake
-      for (var j = 0; j < rad.length; j++) { ut.push(rad[j]); }
-    }
-    return ut;
-  }
-
-  /* ── Kryss: rette linjer i flere retninger, flere lag der det er mørkt ── */
+  /* ── Krysskravur: rette linjer i fire retninger, flere lag jo mørkere det er ── */
   function lag(k, gap, grader, terskel) {
     var a = grader * Math.PI / 180;
     var dx = Math.cos(a), dy = Math.sin(a), nx = -dy, ny = dx;
@@ -139,7 +146,7 @@
   }
   function kryss(k, gap) {
     var g = gap * 0.9;
-    return lag(k, g, 45, 0.2).concat(lag(k, g, 135, 0.45), lag(k, g, 0, 0.7));
+    return lag(k, g, 45, 0.18).concat(lag(k, g, 135, 0.42), lag(k, g, 0, 0.64), lag(k, g, 90, 0.82));
   }
 
   /* ── Tegne ── */
@@ -243,7 +250,7 @@
     klargjorLerret(W, H);
     var k = mørkhetskart(bilde, W, H);
     var gap = { fin: 5, middels: 7, grov: 10 }[valgt('pf-tetthet')] || 7;
-    streker = valgt('pf-stil') === 'kryss' ? kryss(k, gap) : skravur(k, gap);
+    streker = kryss(k, gap);
     rot.classList.add('pf--har-bilde');
     animer();
   }
