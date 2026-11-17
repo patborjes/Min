@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Plotteriet Effekter
- * Description: 3D-effekter og enklere kjøp for plotteriet.no: tilt og lysrefleks på innrammede bilder, myk avsløring av seksjoner og en fast kjøpsknapp på mobil. Rører ikke pris, handlekurv eller kasse.
- * Version: 0.1.0
+ * Description: 3D-effekter og enklere kjøp for plotteriet.no: 3D på innrammede bilder og forsidens hovedbilde, blekkstrek under overskrifter, myk avsløring og en fast kjøpsknapp på mobil. Rører ikke pris, handlekurv eller kasse.
+ * Version: 0.2.0
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Author: Plotteriet
@@ -11,7 +11,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-const PLOTTERIET_EFFEKTER_VERSJON = '0.1.0';
+const PLOTTERIET_EFFEKTER_VERSJON = '0.2.0';
 
 /**
  * Hvilke moduler som er på. Slå av en modul uten å røre koden:
@@ -20,9 +20,12 @@ const PLOTTERIET_EFFEKTER_VERSJON = '0.1.0';
 function plotteriet_effekter_moduler() {
     $er_produkt = function_exists('is_product') && is_product();
     return apply_filters('plotteriet_effekter_moduler', array(
-        'tilt'      => true,
-        'avsloring' => true,
-        'kjopsbar'  => $er_produkt,
+        'tilt'       => true,   // 3D-tilt og lysrefleks med mus
+        'rulletilt'  => true,   // bildene dreier og flyter mens du scroller (også på mobil)
+        'scene'      => true,   // forsidens hovedbilde i 3D som følger musen
+        'understrek' => true,   // blekkstrek som tegnes under overskriftene
+        'avsloring'  => true,
+        'kjopsbar'   => $er_produkt,
     ));
 }
 

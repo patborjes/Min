@@ -1,18 +1,38 @@
-/* Plotteriet Effekter. Bruker temaets variabler (--y, --ink, --fat, --pop) når de finnes. */
+/* Plotteriet Effekter 0.2.0. Bruker temaets variabler (--y, --ink, --fat, --pop) når de finnes. */
 
-/* ── 3D-tilt og lysrefleks ─────────────────────────────────────────── */
+/* ── 3D på innrammede bilder: mus-tilt + rulle-tilt + dybde i lagene ── */
 .pe-tilt {
-  transform: perspective(900px) rotateX(var(--pe-rx, 0deg)) rotateY(var(--pe-ry, 0deg));
-  transition: transform .5s var(--pop, cubic-bezier(.34, 1.56, .64, 1));
+  transform: perspective(900px) rotateX(calc(var(--pe-rx, 0deg) + var(--pe-sx, 0deg))) rotateY(var(--pe-ry, 0deg)) scale(var(--pe-s, 1));
+  transform-style: preserve-3d;
+  transition: transform .35s ease-out;
   will-change: transform;
 }
-.pe-tilt.pe-aktiv { transition: transform .08s linear; }
+.pe-tilt.pe-aktiv { --pe-s: 1.035; transition: transform .08s linear; }
+.pe-tilt .mat { translate: 0 0 26px; }
 .pe-glare {
-  position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
-  background: radial-gradient(circle at var(--pe-gx, 50%) var(--pe-gy, 50%), rgba(255, 255, 255, .55), rgba(255, 255, 255, 0) 55%);
+  position: absolute; inset: 0; pointer-events: none; border-radius: inherit; translate: 0 0 44px;
+  background: radial-gradient(circle at var(--pe-gx, 50%) var(--pe-gy, 50%), rgba(255, 255, 255, .7), rgba(255, 255, 255, 0) 55%);
   mix-blend-mode: soft-light; opacity: 0; transition: opacity .3s;
 }
 .pe-tilt.pe-aktiv .pe-glare { opacity: 1; }
+.pe-flyt { translate: 0 var(--pe-fy, 0px); }
+
+/* ── Forsidens hovedbilde i 3D ─────────────────────────────────────── */
+.pe-scene {
+  transform: perspective(1100px) rotateX(calc(var(--pe-rx, 0deg) + var(--pe-sx, 0deg))) rotateY(var(--pe-ry, 0deg));
+  transform-style: preserve-3d;
+  transition: transform .5s ease-out;
+}
+.pe-scene.pe-aktiv { transition: transform .12s linear; }
+.pe-scene .paper { translate: 0 0 24px; }
+.pe-scene .snap { translate: 0 0 70px; }
+.pe-scene .sticker { translate: 0 0 110px; }
+.pe-scene .swoosh { translate: 0 0 50px; }
+
+/* ── Blekkstrek under overskriftene ────────────────────────────────── */
+.pe-understrek { display: block; width: min(62%, 380px); height: auto; margin: .12em 0 0; overflow: visible; color: inherit; pointer-events: none; }
+.pe-understrek path { fill: none; stroke: currentColor; stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 1.1s cubic-bezier(.6, .1, .2, 1) .15s; }
+.pe-understrek.pe-skrevet path { stroke-dashoffset: 0 !important; }
 
 /* ── Myk avsløring ─────────────────────────────────────────────────── */
 .pe-js .pe-avslor:not(.pe-inn) { opacity: 0; translate: 0 36px; scale: .96; rotate: 1 0 0 14deg; }
@@ -47,7 +67,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pe-tilt, .pe-tilt.pe-aktiv { transition: none; }
+  .pe-tilt, .pe-tilt.pe-aktiv, .pe-scene, .pe-scene.pe-aktiv { transition: none; transform: none; }
+  .pe-tilt .mat, .pe-scene .paper, .pe-scene .snap, .pe-scene .sticker, .pe-scene .swoosh, .pe-glare { translate: none; }
+  .pe-flyt { translate: none; }
   .pe-js .pe-avslor:not(.pe-inn) { opacity: 1; translate: none; scale: none; rotate: none; }
   .pe-kjop, .pe-kjop.pe-synlig { transition: none; }
 }
