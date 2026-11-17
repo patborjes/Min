@@ -1,0 +1,32 @@
+/* Plotteriet forhåndsvisning. Bruker temaets variabler (--y, --ink, --paper, --fat) når de finnes. */
+.pf { display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(24px, 4vw, 56px); align-items: start; padding: clamp(40px, 6vw, 88px) var(--gutter, clamp(16px, 4vw, 56px)); }
+@media (min-width: 900px) { .pf { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); } }
+.pf__tittel { margin-bottom: .25em; }
+.pf__lead { margin: 0 0 20px; font-weight: 600; max-width: 34em; }
+.pf__start { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; }
+.pf__valg { display: grid; gap: 12px; margin-bottom: 18px; }
+.pf__valg fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pf__valg legend { float: left; width: 5.5em; padding: 0; font-weight: 700; }
+.pf__chip { position: relative; cursor: pointer; }
+.pf__chip input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.pf__chip span { display: inline-block; padding: 8px 18px; border-radius: 999px; border: 2px solid var(--ink, #111); font-weight: 700; transition: background .2s, color .2s; }
+.pf__chip input:checked + span { background: var(--ink, #111); color: var(--y, #ffd31a); }
+.pf__chip input:focus-visible + span { outline: 3px solid var(--ink, #111); outline-offset: 3px; }
+.pf__tall { min-height: 1.6em; margin: 0 0 14px; font-weight: 600; }
+.pf__knapper { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.pf__knapper .btn[disabled] { opacity: .4; pointer-events: none; }
+.pf__merk { margin: 0; font-size: .95rem; opacity: .8; max-width: 38em; }
+
+.pf__papir { margin: 0; }
+.pf__ramme {
+  position: relative; background: var(--paper, #fffdf4); padding: clamp(10px, 2.2vw, 22px); border-radius: 6px;
+  box-shadow: 0 26px 44px -20px rgba(60, 20, 30, .5), 0 2px 0 rgba(0, 0, 0, .08);
+  transform: rotate(1deg);
+}
+.pf__lerret { display: block; width: 100%; height: auto; background: var(--paper, #fffdf4); }
+.pf__penn { position: absolute; left: 0; top: 0; width: 34px; pointer-events: none; opacity: 0; transition: opacity .3s; will-change: transform; }
+.pf.pf--tegner .pf__penn { opacity: 1; }
+.pf__tom { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 20px; text-align: center; font: 400 1.4rem/1.2 var(--fat, "Arial Rounded MT Bold", sans-serif); opacity: .35; pointer-events: none; }
+.pf.pf--har-bilde .pf__tom { display: none; }
+
+@media (prefers-reduced-motion: reduce) { .pf__penn { display: none; } .pf__ramme { transform: none; } }
